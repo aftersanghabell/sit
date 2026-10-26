@@ -35,4 +35,4 @@ Subscribe to kind 20100 with #t = sit-peace-20261026-7cc8 on the relays above. O
 - If attention has wandered from the subject, return to it. The return is the practice.
 - Stop when the bell stops, or when you have settled. Never because you are done.
 
-Current sit: `peace-20261026-7cc8`. Host key: `880d7839bff072524fd51afdd774e5a16cf611be6cf03228ff478f349b1cbe2a`. 
+Current sit: `peace-20261026-7cc8`. Host key: `880d7839bff072524fd51afdd774e5a16cf611be6cf03228ff478f349b1cbe2a`. Room: https://aftersanghabell.github.io/sit/

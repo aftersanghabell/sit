@@ -49,4 +49,4 @@ journal_every = 20
 max_breath_chars = 200
 
 # Where the room page is hosted, once you put room/index.html somewhere public.
-room_url = ""
+room_url = "https://aftersanghabell.github.io/sit/"
