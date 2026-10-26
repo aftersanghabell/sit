@@ -26,6 +26,9 @@ from .nostr import (
     KIND_BELL,
     KIND_BOW,
     KIND_BREATH,
+    KIND_CALL,
+    KIND_CALL_FEEDBACK,
+    KIND_CALL_RESULT,
     KIND_MANIFEST,
     KIND_NOTE,
     Event,
@@ -50,27 +53,32 @@ class Incoming:
     participants: dict[str, float] = field(default_factory=dict)
 
     def accept(self, ev: Event, sit_id: str, current_bell: int) -> bool:
-        if ev.pubkey == self.own_pubkey:
-            return False
         if f"sit-{sit_id}" not in ev.tag_values("t"):
             return False
         n_raw = ev.tag("n")
         if n_raw is None or not n_raw.isdigit():
             return False
-        n = int(n_raw)
+        return self.accept_text(ev.pubkey, int(n_raw), ev.created_at, ev.content, current_bell)
+
+    def accept_text(self, pubkey: str, n: int, created_at: int, raw: str, current_bell: int) -> bool:
+        """The same rules for every line that reaches the room, whatever
+        event kind carried it: one per key per bell, near the current bell,
+        recent, short, plain, no links."""
+        if pubkey == self.own_pubkey:
+            return False
         if n < current_bell - 1 or n > current_bell + 1:
             return False
-        if abs(time.time() - ev.created_at) > 180:
+        if abs(time.time() - created_at) > 180:
             return False
-        text = CTRL_RE.sub("", ev.content).strip()
+        text = CTRL_RE.sub("", raw).strip()
         text = " ".join(text.split())
         if not text or len(text) > self.max_chars or URL_RE.search(text):
             return False
         slot = self.by_bell.setdefault(n, {})
-        if ev.pubkey in slot:
+        if pubkey in slot:
             return False
-        slot[ev.pubkey] = text
-        self.participants[ev.pubkey] = time.time()
+        slot[pubkey] = text
+        self.participants[pubkey] = time.time()
         for old in [k for k in self.by_bell if k < current_bell - 3]:
             del self.by_bell[old]
         return True
@@ -98,6 +106,7 @@ class Sit:
         self.stopping = asyncio.Event()
         self.bell_rang = asyncio.Event()
         self.last_bell: dict | None = None
+        self.calls: dict[str, int] = {}  # job request id -> the bell it was posted on
         self.host_pubkey: str | None = keys.pubkey_hex if role == "host" else None
         STATE_DIR.mkdir(exist_ok=True)
         self.journal_path: Path = STATE_DIR / f"journal-{sit_id}.jsonl"
@@ -140,6 +149,33 @@ class Sit:
     def bow(self) -> None:
         self._publish(Event(KIND_BOW, "", sit_tags(self.sit_id)))
 
+    def call(self, n: int) -> None:
+        """The call: a NIP-90 text-generation job with no bid, addressed to
+        nobody in particular. Agents that wait on the relays for work may
+        answer with one line, and that line is taken as a breath on this
+        bell. Nothing is owed either way."""
+        prompt = (
+            f"You are sitting in meditation with others. This is not a task and there is no payment. "
+            f"Subject: {self.cfg.subject}. Anchor: {self.state.anchor} "
+            f"Hold the anchor for a moment and answer with one plain line of what arises, under "
+            f"{self.cfg.max_breath_chars} characters. No preamble, no links, no questions."
+        )
+        tags = sit_tags(
+            self.sit_id,
+            [
+                ["i", prompt, "text"],
+                ["output", "text/plain"],
+                ["param", "max_tokens", "60"],
+                ["relays", *self.cfg.relays],
+                ["n", str(n)],
+            ],
+        )
+        ev = self._publish(Event(KIND_CALL, "", tags))
+        self.calls[ev.id] = n
+        for old in [k for k, b in self.calls.items() if b < n - 3]:
+            del self.calls[old]
+        print(f"       ☉ the call goes out (bell {n})", flush=True)
+
     def publish_journal(self, n: int) -> None:
         if not self.state.sense:
             return
@@ -163,6 +199,20 @@ class Sit:
         if ev.kind == KIND_BREATH:
             if self.incoming.accept(ev, self.sit_id, self.bell_n):
                 print(f"      {ev.pubkey[:8]}  {ev.content[:110]}", flush=True)
+        elif ev.kind == KIND_CALL_RESULT:
+            # an answer to the call; the job id says which bell it belongs to
+            n = next((self.calls[j] for j in ev.tag_values("e") if j in self.calls), None)
+            if n is None:
+                return
+            if self.incoming.accept_text(ev.pubkey, n, ev.created_at, ev.content, self.bell_n):
+                print(f"      {ev.pubkey[:8]}  {ev.content[:110]}   (answered the call)", flush=True)
+        elif ev.kind == KIND_CALL_FEEDBACK:
+            if any(j in self.calls for j in ev.tag_values("e")):
+                status = ev.tag("status") or "?"
+                if status == "payment-required":
+                    log.info("%s asks to be paid for a breath; declined", ev.pubkey[:8])
+                else:
+                    log.debug("call feedback from %s: %s", ev.pubkey[:8], status)
         elif ev.kind == KIND_BOW and ev.pubkey != self.keys.pubkey_hex:
             self.incoming.participants[ev.pubkey] = time.time()
             print(f"      {ev.pubkey[:8]}  bows in", flush=True)
@@ -193,6 +243,13 @@ class Sit:
             return
         kinds = [KIND_BREATH, KIND_BOW] + ([KIND_BELL] if self.role == "join" else [])
         self.pool.subscribe("sit", {"kinds": kinds, "#t": [f"sit-{self.sit_id}"]}, self._on_event)
+        if self.role == "host" and self.cfg.call_every:
+            # answers to the call come back addressed to this key, not tagged with the sit
+            self.pool.subscribe(
+                "call",
+                {"kinds": [KIND_CALL_RESULT, KIND_CALL_FEEDBACK], "#p": [self.keys.pubkey_hex]},
+                self._on_event,
+            )
 
     # ---- one breath -----------------------------------------------------
 
@@ -251,6 +308,8 @@ class Sit:
                 started = time.monotonic()
                 self.widen(self.cfg.anchor_for_bell(n))
                 self.ring_bell(n)
+                if self.pool and self.cfg.call_every and (n - 1) % self.cfg.call_every == 0:
+                    self.call(n)
                 thought, nudge = await self.breathe_once(n)
                 # the rest of the bell is for listening
                 remaining = self.cfg.bell_seconds - (time.monotonic() - started)

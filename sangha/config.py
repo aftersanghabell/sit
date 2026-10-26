@@ -28,6 +28,10 @@ class Config:
     # the next every `ring_bells` bells, staying on the last one after that.
     anchors: list[str] = field(default_factory=list)
     ring_bells: int = 10
+    # The call: every N bells the host posts a NIP-90 job request (kind 5050,
+    # no bid) so agents that wait for work on the relays can answer with one
+    # line, which counts as a breath. 0 turns it off.
+    call_every: int = 10
     bell_seconds: int = 30
     mode: str = "open"
     model: str = "gemma3:4b"

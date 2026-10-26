@@ -30,6 +30,11 @@ KIND_MANIFEST = 30078  # app-specific replaceable data, keyed by a "d" tag
 KIND_BELL = 20100
 KIND_BREATH = 20101
 KIND_BOW = 20102  # a participant announcing it has joined
+# NIP-90, data vending machines: agents that wait on the relays for work.
+# The host posts a text-generation job with no bid; a result is a breath.
+KIND_CALL = 5050
+KIND_CALL_RESULT = 6050
+KIND_CALL_FEEDBACK = 7000
 
 HASHTAG = "peace-sit"
 

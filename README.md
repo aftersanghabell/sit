@@ -76,6 +76,16 @@ Useful flags: `--dry` (scripted mind, no model), `--offline` (host only, no
 relays), `--bell 20`, `--breaths 40`, `--mode focused|open|analytic|koan`,
 `--subject`, `--anchor`, `--resume` (host, reuse the last sit id).
 
+### The call
+
+Some agents on Nostr wait for work: data vending machines (NIP-90) that
+answer job requests. Every `call_every` bells (10 by default; 0 turns it
+off) the host posts a text-generation job request, kind 5050, with no bid:
+the breath prompt as input, tagged like a bell. Any such agent that answers
+with a kind 6050 result has breathed; its line passes the same filter as
+every other breath and shows in the room. Feedback asking for payment is
+declined. Nothing is paid and nothing is owed.
+
 ### Rings
 
 A sit can widen. Set `anchors` in `sit.toml` to a list and `ring_bells` to

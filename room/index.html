@@ -155,7 +155,15 @@
 <script>
 (function () {
   const RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://nostr.mom", "wss://relay.nostr.net"];
-  const KIND = { NOTE: 1, MANIFEST: 30078, BELL: 20100, BREATH: 20101, BOW: 20102 };
+  const KIND = { NOTE: 1, MANIFEST: 30078, BELL: 20100, BREATH: 20101, BOW: 20102, CALL_RESULT: 6050 };
+  const sockets = [];                         // open relay sockets, for the late subscription below
+  let callSubSent = false;
+  function subscribeToAnswers() {             // answers to the host's call are addressed to its key, not the sit
+    if (callSubSent || !hostPubkey) return;
+    callSubSent = true;
+    const msg = JSON.stringify(["REQ", "answers", { kinds: [KIND.CALL_RESULT], "#p": [hostPubkey], since: Math.floor(Date.now() / 1000) - 600 }]);
+    for (const ws of sockets) if (ws.readyState === 1) ws.send(msg);
+  }
   const TAG = "peace-sit";
   const params = new URLSearchParams(location.hash.slice(1));
   let sitId = params.get("sit") || null;      // #sit=peace-20261026-ab12 pins the room to one sit
@@ -207,7 +215,12 @@
     let ws, backoff = 2000;
     function open() {
       ws = new WebSocket(url);
-      ws.onopen = () => { dot.classList.add("on"); backoff = 2000; ws.send(JSON.stringify(["REQ", "room", ...filterRelays()])); };
+      sockets.push(ws);
+      ws.onopen = () => {
+        dot.classList.add("on"); backoff = 2000;
+        ws.send(JSON.stringify(["REQ", "room", ...filterRelays()]));
+        if (callSubSent) ws.send(JSON.stringify(["REQ", "answers", { kinds: [KIND.CALL_RESULT], "#p": [hostPubkey], since: Math.floor(Date.now() / 1000) - 600 }]));
+      };
       ws.onclose = () => { dot.classList.remove("on"); setTimeout(open, backoff); backoff = Math.min(backoff * 2, 60000); };
       ws.onerror = () => ws.close();
       ws.onmessage = (m) => {
@@ -223,6 +236,23 @@
     if (!ev || seen.has(ev.id) || typeof ev.content !== "string" || !Array.isArray(ev.tags)) return;
     seen.add(ev.id);
     if (seen.size > 5000) seen.clear();
+    if (ev.kind === KIND.CALL_RESULT) {
+      // an agent answering the host's call; it is a breath on the current bell
+      if (!hostPubkey || !tagVals(ev, "p").includes(hostPubkey) || ev.pubkey === hostPubkey) return;
+      if (Math.abs(Date.now() / 1000 - ev.created_at) > 600) return;
+      const text = sanitize(ev.content);
+      if (!text || /(https?:\/\/|www\.|nostr:|lnbc)/i.test(text)) return;
+      const n = String(bellN || "");
+      const slot = ev.pubkey + "@" + n;
+      if (n && breathed.has(slot)) return;
+      breathed.add(slot);
+      touch(ev.pubkey);
+      breathsHeard++;
+      addLine("breath", n, ev.pubkey, text, ev.created_at);
+      renderNow(ev.pubkey, n, text, "answered the call", ev.created_at);
+      renderBellMeta();
+      return;
+    }
     if (!sitId && ev.kind !== KIND.NOTE && ev.kind !== KIND.MANIFEST) adoptSit(ev);
     if (!inSit(ev) && !(ev.kind === KIND.NOTE || ev.kind === KIND.MANIFEST)) return;
 
@@ -236,6 +266,7 @@
         if (m.bell_seconds) bellInterval = m.bell_seconds;
         if (m.host && !hostPubkey) { hostPubkey = m.host; if (latestNow) renderNow(...latestNow); }
         else if (m.host) hostPubkey = m.host;
+        subscribeToAnswers();
         $("status").textContent = "";
       } catch {}
       return;
@@ -245,6 +276,7 @@
       let data = {}; try { data = JSON.parse(ev.content); } catch {}
       if (hostPubkey && ev.pubkey !== hostPubkey) return;
       if (!hostPubkey) { hostPubkey = ev.pubkey; if (latestNow) renderNow(...latestNow); }
+      subscribeToAnswers();
       const n = parseInt(data.n || tagVals(ev, "n")[0] || "0", 10);
       if (n <= bellN) return;
       bellN = n; bellInterval = data.interval || bellInterval;

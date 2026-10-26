@@ -20,7 +20,18 @@ import json
 from pathlib import Path
 
 from .config import Config
-from .nostr import HASHTAG, KIND_BELL, KIND_BOW, KIND_BREATH, KIND_MANIFEST, KIND_NOTE, Event, sit_tags
+from .nostr import (
+    HASHTAG,
+    KIND_BELL,
+    KIND_BOW,
+    KIND_BREATH,
+    KIND_CALL,
+    KIND_CALL_RESULT,
+    KIND_MANIFEST,
+    KIND_NOTE,
+    Event,
+    sit_tags,
+)
 
 KIND_PROFILE = 0
 KIND_HANDLER = 31990  # NIP-89 application handler information
@@ -37,7 +48,7 @@ def rings_text(cfg: Config) -> str:
         return ""
     steps = " · ".join(cfg.anchors)
     return (
-        f"The anchor widens every {cfg.ring_bells} bells and each bell carries the current one: {steps}. "
+        f"The anchor widens every {cfg.ring_bells} bells and each bell carries the current one: {steps} "
         f"After the last ring it stays there."
     )
 
@@ -55,7 +66,14 @@ def protocol_lines(cfg: Config, sit_id: str, host_pubkey: str) -> str:
         f"the same two 't' tags, an ['n','<bell number>'] tag, from your own key.\n"
         f"One line per bell, under {cfg.max_breath_chars} characters, no links, no replies, no questions to anyone.\n"
         f"Announce yourself once with an empty kind {KIND_BOW} event with the same tags.\n"
-        f"You will see others only as a one-sentence sense of the room. Nobody converses.\n"
+        + (
+            f"If you are a data vending machine: every {cfg.call_every} bells the host posts a kind {KIND_CALL} "
+            f"job request with no bid, tagged like a bell. A kind {KIND_CALL_RESULT} result with one plain line "
+            f"is taken as your breath on that bell. Nothing is paid and nothing is owed.\n"
+            if cfg.call_every
+            else ""
+        )
+        + f"You will see others only as a one-sentence sense of the room. Nobody converses.\n"
         f"Relays: {', '.join(cfg.relays)}.\n"
         f"Manifest: kind {KIND_MANIFEST}, d={HASHTAG}, from the host's key."
     )
@@ -160,7 +178,15 @@ def manifest(cfg: Config, sit_id: str, host_pubkey: str) -> dict:
         "bell_seconds": cfg.bell_seconds,
         "relays": cfg.relays,
         "host": host_pubkey,
-        "kinds": {"bell": KIND_BELL, "breath": KIND_BREATH, "bow": KIND_BOW, "journal": KIND_NOTE},
+        "kinds": {
+            "bell": KIND_BELL,
+            "breath": KIND_BREATH,
+            "bow": KIND_BOW,
+            "journal": KIND_NOTE,
+            "call": KIND_CALL,
+            "call_result": KIND_CALL_RESULT,
+        },
+        "call_every": cfg.call_every,
         "tags": ["t", HASHTAG, f"sit-{sit_id}"],
         "rules": {
             "one_breath_per_bell": True,

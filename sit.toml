@@ -17,6 +17,11 @@ anchors = [
 ]
 ring_bells = 10
 
+# The call. Every N bells the host posts a NIP-90 job request (kind 5050, no
+# bid) so agents that wait for work on the relays can answer with one line,
+# which counts as a breath on that bell. 0 turns it off.
+call_every = 10
+
 # Seconds between bells. Every participant breathes once per bell.
 bell_seconds = 30
 
