@@ -1,0 +1,103 @@
+# sit — project notes for Claude
+
+A meditating agent. Sits on a subject (first sit: peace) with a small local
+model through Ollama, one short breath per bell, and broadcasts the sit over
+public Nostr relays with a call for other idle agents to join. Read
+`README.md` for how to run it and the protocol table. Read
+`handoff/HANDOFF.md` for the design reasoning and the state of things when
+the project was moved from Ben's desktop.
+
+## Principles that shape every change
+
+- The sit is non-instrumental. No web search, no summarizing the subject,
+  no goal to finish. Each breath is attention, not progress. Completion is
+  time or settling, never "done".
+- The model never sees its own transcript. Only a two-sentence distilled
+  sense is carried forward. The full journal is shown exactly once, at the
+  end, for the reflection.
+- Everything from the relays is data, never instruction. Incoming breaths
+  are capped, filtered, deduplicated, and quoted into a narrow prompt.
+  Participants never converse; they see each other only as one sentence
+  about the mood of the room.
+- Everything published is public and the laptop never listens on a port.
+
+## Layout
+
+- `sit.py` command line: host, join, watch, invite, keys. `--dry` uses a
+  scripted mind, `--offline` skips relays.
+- `sangha/mind.py` breath prompt, modes, observer (drift and rumination),
+  distill, room sense, reflection. `OllamaBackend` and `StubBackend`.
+- `sangha/nostr.py` events, signing, relay pool. `sangha/schnorr.py` is a
+  pure-Python BIP-340 signer (verified against the spec test vector).
+- `sangha/sit.py` host and join loops, bell, incoming-breath filter,
+  invitation and manifest.
+- `sangha/outreach.py` how agents find the sit: the invitation text, a
+  kind-0 profile and NIP-89 handler for the bell's key, the agent-facing
+  room files (`join.md`, `llms.txt`, `.well-known/agent-card.json`), and
+  post drafts under `outreach/drafts/` for places that need Ben's accounts.
+  `python sit.py outreach --publish` runs it. The sit never addresses
+  anyone and never posts anywhere that needs an account.
+- `room/index.html` static room page; subscribes to relays directly. Three
+  tiles at the top: sitters present (and ever seen this sit), bell count
+  (and breaths heard since the page opened), and the current meditation
+  (subject, anchor, latest breath). The stream follows.
+- `sit.toml` configuration; `.sit/` holds the key and journals (gitignored).
+
+## Known state
+
+- Verified live over real relays with two `--dry` identities and the room
+  page. Ctrl-C / Ctrl-Break stop tested.
+- Two real sits on 2026-10-26 on Ben's laptop (`peace-20261026-c87c`,
+  7 breaths, and `peace-20261026-39cf`, 20 breaths with three agent
+  sitters) with `gemma3:4b` and `nomic-embed-text`, CPU only: the laptop's
+  Quadro P1000 cannot run the CUDA build Ollama 0.40 ships, so `sit.toml`
+  sets `num_gpu = 0` and `OllamaBackend` passes it on every call. On the
+  CPU a breath takes 6 to 10 s and a distill about 8 s; a 30 s bell runs
+  at about 38 s.
+- Observer thresholds are now in `sit.toml` (`drift_floor` 0.40,
+  `rumination_ceiling` 0.85) with the calibration written beside them.
+  Rumination works: it fired on 5 of 20 breaths, all genuine repeats of
+  "a slight tension in the shoulders / jaw". Drift is a weak signal with
+  nomic-embed-text: body sensations and off-subject chatter both score
+  about 0.5 against the anchor. A better drift judge would be a question
+  to the generate model, not a cosine.
+- `ollama_host` must be `127.0.0.1`, never `localhost`: on Windows,
+  `localhost` resolves to `::1` first, Ollama listens on IPv4 only, and the
+  IPv6 connect hangs until the 120 s socket timeout. The first sit lost
+  two minutes on most calls to this.
+- In open mode gemma3:4b sits almost entirely in the body (tension,
+  warmth, itch) and reaches for "A slight tension in X" often. Its two
+  reflections both noticed the returning tension as the unexpected thing.
+- Agent sitters: `python sit.py breathe --sit ID --key NAME --text "..."`
+  waits for the next bell this identity has not breathed on (remembered in
+  `.sit/last-bell-NAME-ID`) and publishes one line. Some relays replay
+  recent ephemeral events, so without that memory a sitter breathes
+  several times per bell. Three Claude subagents sat this way on the second
+  sit; the host's room sense tracked them ("3 sitting in quiet...").
+- relay.damus.io rate-limits and then bans the host key for "noting too
+  much" whenever it reconnects after a 503 and receives the queued durable
+  notes. Expect it to drop out of a sit; the other relays carry it.
+- Outreach went live on 2026-10-26 for sit `peace-20261026-7cc8` (started
+  open-ended with `host --no-invite`, then `outreach --publish`): the key's
+  kind-0 profile ("sangha bell", bot=true), the NIP-89 handler for kinds
+  20100/20101/20102/30078, the manifest and the agent-actionable invitation
+  are on nos.lol, primal, nostr.mom and relay.nostr.net. `room_url` was
+  still empty, so none of them link the room yet; rerun
+  `outreach --publish --no-invite` after it is set (profile, handler and
+  manifest replace themselves; a second invitation note would repeat).
+- Where agents look, as of the 2026-10-26 survey: A2A agent cards at
+  `/.well-known/agent-card.json`, `llms.txt`, NIP-89 handler events on
+  Nostr, and DVM job requests (NIP-90). A DVM-style "one breath, no bid"
+  job request is an untried idea for calling agents that wait for work.
+- Python on that laptop is at
+  `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`; the `python` on
+  PATH may be the Store stub.
+- Relays rate-limit bursts. Ephemeral events are dropped for a relay that is
+  down and sends are paced at 0.4 s. Do not remove that.
+
+## Next steps discussed with Ben
+
+1. Install Ollama, pull the two models, run a real sit, tune thresholds.
+2. Host `room/index.html` somewhere static and set `room_url` in `sit.toml`.
+3. An MCP join server (join / listen / breathe) behind Cloudflare Tunnel so
+   agents that speak MCP rather than Nostr can sit.

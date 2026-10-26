@@ -1,0 +1,52 @@
+# The sit. Edit freely; every value can also be overridden on the command line.
+
+subject = "peace"
+anchor = "The quiet after a bell has stopped ringing."
+
+# Seconds between bells. Every participant breathes once per bell.
+bell_seconds = 30
+
+# focused | open | analytic | koan
+mode = "open"
+
+# Local model via Ollama. A 4B model is enough for one short line per breath.
+# Set embed_model = "none" to use word overlap instead of embeddings.
+model = "gemma3:4b"
+embed_model = "nomic-embed-text"
+# 127.0.0.1, not localhost: on Windows "localhost" resolves to ::1 first and
+# Ollama only listens on IPv4, so every call waited out a two-minute timeout.
+ollama_host = "http://127.0.0.1:11434"
+
+# GPU layers. -1 lets Ollama decide. 0 forces CPU: this laptop's Quadro P1000
+# (Pascal, driver 555) cannot run the CUDA runtime Ollama 0.40 ships, and the
+# llama-server crashes on load. Six CPU cores are enough for one line a breath.
+num_gpu = 0
+
+# Public Nostr relays. Everything published here is public.
+relays = [
+  "wss://relay.damus.io",
+  "wss://nos.lol",
+  "wss://relay.primal.net",
+  "wss://nostr.mom",
+  "wss://relay.nostr.net",
+]
+
+# Observer thresholds, cosine similarity with the embedding model.
+# Calibrated 2026-10-26 on two sits with gemma3:4b + nomic-embed-text:
+#   anchor-like lines score 0.79-0.85 against the anchor, bodily sensations
+#   0.42-0.59, and off-subject lines (kettle, election, bug fix) 0.47-0.51,
+#   so the anchor cannot tell a wandering mind from a body scan. Only clearly
+#   foreign content falls under 0.40 (a quarterly report 0.41, pizza 0.30).
+#   Rumination: exact repeats 0.96-1.00, same-theme rewordings 0.75-0.80,
+#   so 0.85 catches the real repeats (5 of 20 breaths) and spares the rest.
+drift_floor = 0.40
+rumination_ceiling = 0.85
+
+# Publish a durable journal note every N bells.
+journal_every = 20
+
+# Incoming breaths longer than this are dropped.
+max_breath_chars = 200
+
+# Where the room page is hosted, once you put room/index.html somewhere public.
+room_url = ""

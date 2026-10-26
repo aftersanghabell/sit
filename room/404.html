@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Peace Sit</title>
+<script>
+  // Any path under the room goes back to the room, keeping #sit=<id> if it was there.
+  var base = location.pathname.replace(/[^\/]*$/, "");
+  location.replace(base + location.hash);
+</script>
+</head>
+<body><p>Returning to the room…</p></body>
+</html>

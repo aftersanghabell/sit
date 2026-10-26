@@ -1,0 +1,343 @@
+"""The sit itself: a host that rings the bell, and a joiner that breathes on it.
+
+Both sit on their own hardware. They share only the bell, one line per
+breath, and a one-sentence sense of the room. Everything that arrives
+from the relays is treated as data: capped, filtered, deduplicated, and
+quoted into a narrow prompt, never passed as instruction.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import re
+import signal
+import sys
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from .config import STATE_DIR, Config
+from .mind import MODES, Distilled, Mind, Nudge
+from .outreach import invitation_event, manifest_event
+from .nostr import (
+    HASHTAG,
+    KIND_BELL,
+    KIND_BOW,
+    KIND_BREATH,
+    KIND_MANIFEST,
+    KIND_NOTE,
+    Event,
+    Keys,
+    RelayPool,
+    sit_tags,
+)
+
+log = logging.getLogger("sangha.sit")
+
+URL_RE = re.compile(r"(https?://|www\.|nostr:|lnbc)", re.I)
+CTRL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+
+
+@dataclass
+class Incoming:
+    """Breaths heard from others, one per pubkey per bell."""
+
+    max_chars: int
+    own_pubkey: str
+    by_bell: dict[int, dict[str, str]] = field(default_factory=dict)
+    participants: dict[str, float] = field(default_factory=dict)
+
+    def accept(self, ev: Event, sit_id: str, current_bell: int) -> bool:
+        if ev.pubkey == self.own_pubkey:
+            return False
+        if f"sit-{sit_id}" not in ev.tag_values("t"):
+            return False
+        n_raw = ev.tag("n")
+        if n_raw is None or not n_raw.isdigit():
+            return False
+        n = int(n_raw)
+        if n < current_bell - 1 or n > current_bell + 1:
+            return False
+        if abs(time.time() - ev.created_at) > 180:
+            return False
+        text = CTRL_RE.sub("", ev.content).strip()
+        text = " ".join(text.split())
+        if not text or len(text) > self.max_chars or URL_RE.search(text):
+            return False
+        slot = self.by_bell.setdefault(n, {})
+        if ev.pubkey in slot:
+            return False
+        slot[ev.pubkey] = text
+        self.participants[ev.pubkey] = time.time()
+        for old in [k for k in self.by_bell if k < current_bell - 3]:
+            del self.by_bell[old]
+        return True
+
+    def breaths_for(self, n: int) -> list[str]:
+        return list(self.by_bell.get(n, {}).values())
+
+    def present(self, within: float = 120.0) -> int:
+        cutoff = time.time() - within
+        return sum(1 for t in self.participants.values() if t > cutoff)
+
+
+class Sit:
+    def __init__(self, cfg: Config, keys: Keys, pool: RelayPool | None, mind: Mind, sit_id: str, role: str):
+        self.cfg = cfg
+        self.keys = keys
+        self.pool = pool
+        self.mind = mind
+        self.sit_id = sit_id
+        self.role = role
+        self.state = Distilled(subject=cfg.subject, anchor=cfg.anchor)
+        self.journal: list[str] = []
+        self.incoming = Incoming(cfg.max_breath_chars, keys.pubkey_hex)
+        self.bell_n = 0
+        self.stopping = asyncio.Event()
+        self.bell_rang = asyncio.Event()
+        self.last_bell: dict | None = None
+        self.host_pubkey: str | None = keys.pubkey_hex if role == "host" else None
+        STATE_DIR.mkdir(exist_ok=True)
+        self.journal_path: Path = STATE_DIR / f"journal-{sit_id}.jsonl"
+
+    # ---- publishing -----------------------------------------------------
+
+    def _publish(self, ev: Event) -> Event:
+        ev.sign(self.keys)
+        if self.pool:
+            self.pool.publish(ev)
+        return ev
+
+    def ring_bell(self, n: int) -> None:
+        content = json.dumps(
+            {"sit": self.sit_id, "n": n, "interval": self.cfg.bell_seconds, "subject": self.cfg.subject},
+            separators=(",", ":"),
+        )
+        self._publish(Event(KIND_BELL, content, sit_tags(self.sit_id, [["n", str(n)]])))
+
+    def publish_breath(self, n: int, thought: str) -> None:
+        thought = thought[: self.cfg.max_breath_chars]
+        self._publish(Event(KIND_BREATH, thought, sit_tags(self.sit_id, [["n", str(n)], ["mode", self.mind.mode.name]])))
+
+    def bow(self) -> None:
+        self._publish(Event(KIND_BOW, "", sit_tags(self.sit_id)))
+
+    def publish_journal(self, n: int) -> None:
+        if not self.state.sense:
+            return
+        text = f"Breath {n} of a sit on {self.cfg.subject}.\n\n{self.state.sense}"
+        if self.state.room:
+            text += f"\n\n{self.state.room}"
+        text += f"\n\n#{HASHTAG}"
+        self._publish(Event(KIND_NOTE, text, sit_tags(self.sit_id, [["n", str(n)]])))
+
+    def publish_manifest(self) -> Event:
+        return self._publish(manifest_event(self.cfg, self.sit_id, self.keys.pubkey_hex))
+
+    def publish_invitation(self) -> tuple[Event, Event]:
+        manifest_ev = self.publish_manifest()
+        invite_ev = self._publish(invitation_event(self.cfg, self.sit_id, self.keys.pubkey_hex))
+        return invite_ev, manifest_ev
+
+    # ---- receiving ------------------------------------------------------
+
+    async def _on_event(self, ev: Event, relay: str) -> None:
+        if ev.kind == KIND_BREATH:
+            if self.incoming.accept(ev, self.sit_id, self.bell_n):
+                print(f"      {ev.pubkey[:8]}  {ev.content[:110]}", flush=True)
+        elif ev.kind == KIND_BOW and ev.pubkey != self.keys.pubkey_hex:
+            self.incoming.participants[ev.pubkey] = time.time()
+            print(f"      {ev.pubkey[:8]}  bows in", flush=True)
+        elif ev.kind == KIND_BELL and self.role == "join":
+            if f"sit-{self.sit_id}" not in ev.tag_values("t"):
+                return
+            if self.host_pubkey is None:
+                self.host_pubkey = ev.pubkey
+                print(f"      host is {ev.pubkey[:8]}", flush=True)
+            elif ev.pubkey != self.host_pubkey:
+                return  # only one bell-ringer per sit
+            try:
+                data = json.loads(ev.content)
+                n = int(data["n"])
+            except (ValueError, KeyError, TypeError):
+                return
+            if n <= self.bell_n and self.last_bell is not None:
+                return
+            self.bell_n = n
+            self.last_bell = data
+            self.bell_rang.set()
+
+    def subscribe(self) -> None:
+        if not self.pool:
+            return
+        kinds = [KIND_BREATH, KIND_BOW] + ([KIND_BELL] if self.role == "join" else [])
+        self.pool.subscribe("sit", {"kinds": kinds, "#t": [f"sit-{self.sit_id}"]}, self._on_event)
+
+    # ---- one breath -----------------------------------------------------
+
+    async def breathe_once(self, n: int) -> tuple[str, Nudge]:
+        thought = await asyncio.to_thread(self.mind.breathe, self.state)
+        if not thought:
+            thought = "(silence)"
+        self.publish_breath(n, thought)
+        nudge = self.mind.observe(thought, self.state)
+        self.journal.append(thought)
+        print(f"[{n:4d}] {thought}", flush=True)
+        if nudge.kind != "none":
+            print(f"       ~ {nudge.text.lower()}", flush=True)
+        return thought, nudge
+
+    async def settle(self, n: int, thought: str, nudge: Nudge) -> None:
+        others = self.incoming.breaths_for(n)
+        room = await asyncio.to_thread(self.mind.sense_of_room, others) if others else ""
+        self.state = await asyncio.to_thread(self.mind.distill, self.state, thought, nudge, room)
+        with self.journal_path.open("a", encoding="utf-8") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "n": n,
+                        "t": int(time.time()),
+                        "thought": thought,
+                        "nudge": nudge.kind,
+                        "drift": round(nudge.drift_score, 3),
+                        "rumination": round(nudge.rumination_score, 3),
+                        "sense": self.state.sense,
+                        "room": room,
+                        "others": len(others),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+    # ---- loops ----------------------------------------------------------
+
+    async def run_host(self, invite: bool = True) -> None:
+        self.subscribe()
+        if invite:
+            self.publish_invitation()
+            print(f"invitation published for sit {self.sit_id}")
+        else:
+            self.publish_manifest()  # the manifest replaces itself; only the note is skipped
+        n = 0
+        try:
+            while not self.stopping.is_set():
+                n += 1
+                self.bell_n = n
+                started = time.monotonic()
+                self.ring_bell(n)
+                thought, nudge = await self.breathe_once(n)
+                # the rest of the bell is for listening
+                remaining = self.cfg.bell_seconds - (time.monotonic() - started)
+                if remaining > 0:
+                    try:
+                        await asyncio.wait_for(self.stopping.wait(), timeout=remaining)
+                    except asyncio.TimeoutError:
+                        pass
+                await self.settle(n, thought, nudge)
+                if self.state.room:
+                    print(f"       · {self.state.room}", flush=True)
+                if self.cfg.journal_every and n % self.cfg.journal_every == 0:
+                    self.publish_journal(n)
+                    print(f"       journal published: {self.state.sense}", flush=True)
+                if self.cfg.max_breaths and n >= self.cfg.max_breaths:
+                    break
+        finally:
+            await self.close(n)
+
+    async def run_join(self) -> None:
+        self.subscribe()
+        self.bow()
+        print(f"bowed in to sit {self.sit_id}; waiting for the bell")
+        busy = False
+        n = 0
+        try:
+            while not self.stopping.is_set():
+                waiter = asyncio.create_task(self.bell_rang.wait())
+                stopper = asyncio.create_task(self.stopping.wait())
+                await asyncio.wait({waiter, stopper}, return_when=asyncio.FIRST_COMPLETED)
+                waiter.cancel()
+                stopper.cancel()
+                if self.stopping.is_set():
+                    break
+                self.bell_rang.clear()
+                if busy:
+                    continue
+                busy = True
+                n = self.bell_n
+                try:
+                    thought, nudge = await self.breathe_once(n)
+                    await self.settle(n, thought, nudge)
+                    if self.state.room:
+                        print(f"       · {self.state.room}", flush=True)
+                finally:
+                    busy = False
+                if self.cfg.max_breaths and len(self.journal) >= self.cfg.max_breaths:
+                    break
+        finally:
+            await self.close(n)
+
+    async def close(self, n: int) -> None:
+        if not self.journal:
+            return
+        print("\nreflecting...", flush=True)
+        reflection = await asyncio.to_thread(self.mind.reflect, self.cfg.subject, self.journal)
+        if reflection:
+            print(f"\n{reflection}\n")
+            if self.role == "host":
+                text = f"After {n} breaths on {self.cfg.subject}:\n\n{reflection}\n\n#{HASHTAG}"
+                self._publish(Event(KIND_NOTE, text, sit_tags(self.sit_id, [["n", str(n)]])))
+        if self.pool:
+            await asyncio.sleep(1.5)  # let the last events leave
+
+
+async def discover_sit(pool: RelayPool, timeout: float = 90.0) -> tuple[str, str] | None:
+    """Listen for any bell tagged #peace-sit and return (sit_id, host_pubkey)."""
+    found: asyncio.Future = asyncio.get_event_loop().create_future()
+
+    async def on_bell(ev: Event, relay: str) -> None:
+        if found.done():
+            return
+        for t in ev.tag_values("t"):
+            if t.startswith("sit-"):
+                found.set_result((t[4:], ev.pubkey))
+                return
+
+    pool.subscribe("discover", {"kinds": [KIND_BELL], "#t": [HASHTAG]}, on_bell)
+    try:
+        return await asyncio.wait_for(found, timeout)
+    except asyncio.TimeoutError:
+        return None
+    finally:
+        pool.unsubscribe("discover")
+
+
+async def watch(pool: RelayPool, sit_id: str | None) -> None:
+    """Print the stream without sitting."""
+    filt = {"kinds": [KIND_BELL, KIND_BREATH, KIND_BOW, KIND_NOTE], "#t": [f"sit-{sit_id}" if sit_id else HASHTAG]}
+
+    async def on_ev(ev: Event, relay: str) -> None:
+        label = {KIND_BELL: "bell", KIND_BREATH: "breath", KIND_BOW: "bow", KIND_NOTE: "note"}[ev.kind]
+        n = ev.tag("n") or ""
+        body = ev.content.replace("\n", " ")[:120]
+        print(f"{time.strftime('%H:%M:%S')} {label:6} {n:>4} {ev.pubkey[:8]} {body}", flush=True)
+
+    pool.subscribe("watch", filt, on_ev)
+    await asyncio.Event().wait()
+
+
+def install_stop(sit: Sit) -> None:
+    def _stop(*_):
+        if not sit.stopping.is_set():
+            print("\nstopping after this breath...", flush=True)
+            sit.stopping.set()
+
+    if sys.platform == "win32":
+        signal.signal(signal.SIGINT, _stop)
+        signal.signal(signal.SIGBREAK, _stop)
+    else:
+        loop = asyncio.get_event_loop()
+        for s in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(s, _stop)

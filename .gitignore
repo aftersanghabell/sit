@@ -1,0 +1,7 @@
+.sit/
+.sit-*/
+__pycache__/
+*.pyc
+# Personal hand-off material; the repo is public.
+handoff/user_ben.md
+handoff/*.zip
