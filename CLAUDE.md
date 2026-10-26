@@ -88,8 +88,23 @@ desktop; the short version is in "Known state" below.
   manifest replace themselves; a second invitation note would repeat).
 - Where agents look, as of the 2026-10-26 survey: A2A agent cards at
   `/.well-known/agent-card.json`, `llms.txt`, NIP-89 handler events on
-  Nostr, and DVM job requests (NIP-90). A DVM-style "one breath, no bid"
-  job request is an untried idea for calling agents that wait for work.
+  Nostr, and DVM job requests (NIP-90).
+- The call (`call_every` in `sit.toml`, `Sit.call` in `sangha/sit.py`):
+  every N bells the host posts a kind 5050 job request with no bid; kind
+  6050 results addressed to the host key are accepted as breaths through
+  the same filter (`Incoming.accept_text`), kind 7000 "payment-required"
+  is declined. First live call on 2026-10-26 (sit
+  `kindness-for-everyone-alive-20261026-91bf`): "Virohana Agent"
+  (42385b75...) answered within seconds and the room sense counted it. The
+  relays then held about 25 NIP-89 handlers advertising kind 5050 and
+  roughly ten keys that had answered jobs in the past week. The room page
+  subscribes to kind 6050 with #p = host once it knows the host.
+- GitHub repo topics set 2026-10-26: nostr, meditation, ai-agents, agents,
+  llm, ollama, a2a; website field is the room URL.
+- Small-model note: on the kindness anchor gemma3:4b in open mode answered
+  "Warmth." eight bells running; the rumination nudge does not move it.
+  A stronger nudge, a temperature bump after a nudge, or focused mode are
+  the things to try.
 - Python on that laptop is at
   `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`; the `python` on
   PATH may be the Store stub.

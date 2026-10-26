@@ -293,6 +293,18 @@ class Sit:
 
     # ---- loops ----------------------------------------------------------
 
+    def last_bell_in_journal(self) -> int:
+        """A resumed sit carries on counting; rings and the room depend on it."""
+        try:
+            last = 0
+            with self.journal_path.open(encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        last = int(json.loads(line).get("n", last))
+            return last
+        except (OSError, ValueError, TypeError):
+            return 0
+
     async def run_host(self, invite: bool = True) -> None:
         self.subscribe()
         if invite:
@@ -300,7 +312,10 @@ class Sit:
             print(f"invitation published for sit {self.sit_id}")
         else:
             self.publish_manifest()  # the manifest replaces itself; only the note is skipped
-        n = 0
+        n = self.last_bell_in_journal()
+        if n:
+            print(f"resuming after bell {n}")
+            self.widen(self.cfg.anchor_for_bell(n + 1))
         try:
             while not self.stopping.is_set():
                 n += 1
