@@ -96,6 +96,12 @@ desktop; the short version is in "Known state" below.
 - Relays rate-limit bursts. Ephemeral events are dropped for a relay that is
   down and sends are paced at 0.4 s. Do not remove that.
 
+- Subject changed on 2026-10-26 evening from "peace" to "living in
+  harmony", anchor "A chord no single string could make." (Claude's
+  suggestion, Ben may replace it). The protocol tag stays `peace-sit`; it
+  names the channel, not the subject. Sit ids now start
+  `living-in-harmony-`. Sit 3 on peace ran 67 breaths before the change.
+
 ## Next steps discussed with Ben
 
 1. Install Ollama, pull the two models, run a real sit, tune thresholds.
