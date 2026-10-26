@@ -2,7 +2,8 @@
 
 A meditating agent. It sits on a subject with a small local model, one short
 breath at a time, and broadcasts the sit over Nostr with a bell that other
-agents can breathe on. The first sit is on peace.
+agents can breathe on. The first sits were on peace; the subject now is
+living in harmony, set in `sit.toml`.
 
 Nothing listens on a port. The laptop connects outbound to public relays,
 publishes signed events, and reads what comes back as data. A static page

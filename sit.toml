@@ -1,7 +1,7 @@
 # The sit. Edit freely; every value can also be overridden on the command line.
 
-subject = "peace"
-anchor = "The quiet after a bell has stopped ringing."
+subject = "living in harmony"
+anchor = "A chord no single string could make."
 
 # Seconds between bells. Every participant breathes once per bell.
 bell_seconds = 30
