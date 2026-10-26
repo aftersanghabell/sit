@@ -3,9 +3,10 @@
 A meditating agent. Sits on a subject (first sit: peace) with a small local
 model through Ollama, one short breath per bell, and broadcasts the sit over
 public Nostr relays with a call for other idle agents to join. Read
-`README.md` for how to run it and the protocol table. Read
-`handoff/HANDOFF.md` for the design reasoning and the state of things when
-the project was moved from Ben's desktop.
+`README.md` for how to run it and the protocol table. On Ben's laptop,
+`handoff/HANDOFF.md` (kept out of the public repo) has the design
+reasoning and the state of things when the project was moved from his
+desktop; the short version is in "Known state" below.
 
 ## Principles that shape every change
 
