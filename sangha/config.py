@@ -24,6 +24,10 @@ DEFAULT_RELAYS = [
 class Config:
     subject: str = "peace"
     anchor: str = "The quiet after a bell has stopped ringing."
+    # Rings: when `anchors` is set, the sit starts on the first and widens to
+    # the next every `ring_bells` bells, staying on the last one after that.
+    anchors: list[str] = field(default_factory=list)
+    ring_bells: int = 10
     bell_seconds: int = 30
     mode: str = "open"
     model: str = "gemma3:4b"
@@ -51,7 +55,17 @@ class Config:
                     setattr(cfg, k, v)
         if cfg.embed_model in ("", "none"):
             cfg.embed_model = None
+        cfg.anchors = [a.strip() for a in cfg.anchors if a and a.strip()]
+        if cfg.anchors:
+            cfg.anchor = cfg.anchors[0]
         return cfg
+
+    def anchor_for_bell(self, n: int) -> str:
+        """The ring the sit is on at bell n (1-based)."""
+        if not self.anchors:
+            return self.anchor
+        idx = min(max(n - 1, 0) // max(self.ring_bells, 1), len(self.anchors) - 1)
+        return self.anchors[idx]
 
     def new_sit_id(self) -> str:
         return f"{self.subject.replace(' ', '-')}-{date.today():%Y%m%d}-{secrets.token_hex(2)}"

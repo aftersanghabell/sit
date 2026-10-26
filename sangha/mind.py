@@ -274,6 +274,10 @@ class Observer:
             return _cosine(va, vb)
         return _jaccard(a, b)
 
+    def reset_anchor(self) -> None:
+        """Forget the embedded anchor; the next check embeds the new one."""
+        self._anchor_vec = None
+
     def check(self, thought: str, anchor: str, subject: str) -> Nudge:
         vec = self.backend.embed(thought)
         if vec is not None and self._anchor_vec is None:

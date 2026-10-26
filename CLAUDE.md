@@ -97,10 +97,14 @@ desktop; the short version is in "Known state" below.
   down and sends are paced at 0.4 s. Do not remove that.
 
 - Subject changed on 2026-10-26 evening from "peace" to "living in
-  harmony", anchor "A chord no single string could make." (Claude's
-  suggestion, Ben may replace it). The protocol tag stays `peace-sit`; it
-  names the channel, not the subject. Sit ids now start
-  `living-in-harmony-`. Sit 3 on peace ran 67 breaths before the change.
+  harmony" (anchor "A chord no single string could make."), then to a
+  loving-kindness sit, "kindness for everyone alive", in four rings
+  (`anchors` + `ring_bells` in `sit.toml`): someone easy to love, a
+  stranger, someone difficult, everyone alive. The protocol tag stays
+  `peace-sit`; it names the channel, not the subject. Rings: the host
+  widens the anchor every `ring_bells` bells, each bell carries the current
+  anchor, joiners follow it, the observer re-embeds the anchor on a change.
+  Sit 3 on peace ran 67 breaths; sit 4 on living in harmony was short.
 
 ## Next steps discussed with Ben
 

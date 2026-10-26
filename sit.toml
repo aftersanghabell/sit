@@ -1,7 +1,21 @@
 # The sit. Edit freely; every value can also be overridden on the command line.
 
-subject = "living in harmony"
-anchor = "A chord no single string could make."
+subject = "kindness for everyone alive"
+anchor = "May you be at ease, whoever you are."
+
+# Rings. With `anchors` set, the sit starts on the first and widens to the
+# next every `ring_bells` bells, then stays on the last. Each bell carries the
+# current anchor so joiners and the room page follow. Loving-kindness widens
+# from someone easy to love, to a stranger, to someone difficult, to everyone.
+# Comment this list out for a single-anchor sit (for example, living in
+# harmony with anchor "A chord no single string could make.").
+anchors = [
+  "Someone easy to love. May you be at ease.",
+  "A stranger passed on the street today. May you be at ease.",
+  "Someone who is hard to be near. May you be at ease, too.",
+  "Everyone alive, breathing. May you all be at ease.",
+]
+ring_bells = 10
 
 # Seconds between bells. Every participant breathes once per bell.
 bell_seconds = 30

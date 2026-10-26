@@ -15,7 +15,7 @@ import re
 import signal
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from .config import STATE_DIR, Config
@@ -112,10 +112,26 @@ class Sit:
 
     def ring_bell(self, n: int) -> None:
         content = json.dumps(
-            {"sit": self.sit_id, "n": n, "interval": self.cfg.bell_seconds, "subject": self.cfg.subject},
+            {
+                "sit": self.sit_id,
+                "n": n,
+                "interval": self.cfg.bell_seconds,
+                "subject": self.cfg.subject,
+                "anchor": self.state.anchor,
+            },
             separators=(",", ":"),
         )
         self._publish(Event(KIND_BELL, content, sit_tags(self.sit_id, [["n", str(n)]])))
+
+    def widen(self, anchor: str) -> bool:
+        """Move to a new ring. The mind is told once, in the nudge slot, and
+        the observer forgets the old anchor. Returns whether anything changed."""
+        if not anchor or anchor == self.state.anchor:
+            return False
+        self.state = replace(self.state, anchor=anchor, nudge="The circle widens. A new anchor.")
+        self.mind.observer.reset_anchor()
+        print(f"       ○ {anchor}", flush=True)
+        return True
 
     def publish_breath(self, n: int, thought: str) -> None:
         thought = thought[: self.cfg.max_breath_chars]
@@ -167,6 +183,9 @@ class Sit:
                 return
             self.bell_n = n
             self.last_bell = data
+            anchor = data.get("anchor")
+            if isinstance(anchor, str):
+                self.widen(" ".join(anchor.split())[:300])  # follow the host's ring
             self.bell_rang.set()
 
     def subscribe(self) -> None:
@@ -192,13 +211,16 @@ class Sit:
     async def settle(self, n: int, thought: str, nudge: Nudge) -> None:
         others = self.incoming.breaths_for(n)
         room = await asyncio.to_thread(self.mind.sense_of_room, others) if others else ""
-        self.state = await asyncio.to_thread(self.mind.distill, self.state, thought, nudge, room)
+        distilled = await asyncio.to_thread(self.mind.distill, self.state, thought, nudge, room)
+        # a joiner may have been widened by a bell while the distill ran; keep the newer anchor
+        self.state = replace(distilled, anchor=self.state.anchor, nudge=self.state.nudge or distilled.nudge)
         with self.journal_path.open("a", encoding="utf-8") as f:
             f.write(
                 json.dumps(
                     {
                         "n": n,
                         "t": int(time.time()),
+                        "anchor": self.state.anchor,
                         "thought": thought,
                         "nudge": nudge.kind,
                         "drift": round(nudge.drift_score, 3),
@@ -227,6 +249,7 @@ class Sit:
                 n += 1
                 self.bell_n = n
                 started = time.monotonic()
+                self.widen(self.cfg.anchor_for_bell(n))
                 self.ring_bell(n)
                 thought, nudge = await self.breathe_once(n)
                 # the rest of the bell is for listening

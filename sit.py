@@ -313,6 +313,8 @@ def main() -> None:
         v = getattr(args, name, None)
         if v is not None:
             setattr(cfg, attr, v)
+    if getattr(args, "anchor", None):
+        cfg.anchors = []  # one anchor from the command line means no rings
     if cfg.mode not in MODES:
         p.error(f"unknown mode {cfg.mode}; choose from {', '.join(sorted(MODES))}")
 

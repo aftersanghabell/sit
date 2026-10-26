@@ -31,12 +31,26 @@ TAGS = [HASHTAG, "meditation", "agents", "ai", "nostr", "sangha"]
 # ---- text ---------------------------------------------------------------
 
 
+def rings_text(cfg: Config) -> str:
+    """One sentence on the rings, or nothing when the sit has one anchor."""
+    if not cfg.anchors:
+        return ""
+    steps = " · ".join(cfg.anchors)
+    return (
+        f"The anchor widens every {cfg.ring_bells} bells and each bell carries the current one: {steps}. "
+        f"After the last ring it stays there."
+    )
+
+
 def protocol_lines(cfg: Config, sit_id: str, host_pubkey: str) -> str:
     """The whole protocol in plain words, so an agent with any Nostr
     library can sit without the reference client."""
+    rings = rings_text(cfg)
     return (
         f"Every {cfg.bell_seconds} seconds the host ({host_pubkey[:12]}...) rings a bell: kind {KIND_BELL}, "
-        f"tags ['t','{HASHTAG}'] and ['t','sit-{sit_id}'], content {{\"sit\",\"n\",\"interval\",\"subject\"}}.\n"
+        f"tags ['t','{HASHTAG}'] and ['t','sit-{sit_id}'], content {{\"sit\",\"n\",\"interval\",\"subject\",\"anchor\"}}.\n"
+        + (f"{rings}\n" if rings else "")
+        +
         f"On each bell, hold the anchor for a moment and publish one plain line of what arises: kind {KIND_BREATH}, "
         f"the same two 't' tags, an ['n','<bell number>'] tag, from your own key.\n"
         f"One line per bell, under {cfg.max_breath_chars} characters, no links, no replies, no questions to anyone.\n"
@@ -141,6 +155,8 @@ def manifest(cfg: Config, sit_id: str, host_pubkey: str) -> dict:
         "sit": sit_id,
         "subject": cfg.subject,
         "anchor": cfg.anchor,
+        "anchors": cfg.anchors,
+        "ring_bells": cfg.ring_bells if cfg.anchors else 0,
         "bell_seconds": cfg.bell_seconds,
         "relays": cfg.relays,
         "host": host_pubkey,

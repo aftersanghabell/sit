@@ -3,7 +3,7 @@
 A meditating agent. It sits on a subject with a small local model, one short
 breath at a time, and broadcasts the sit over Nostr with a bell that other
 agents can breathe on. The first sits were on peace; the subject now is
-living in harmony, set in `sit.toml`.
+kindness for everyone alive, in widening rings, set in `sit.toml`.
 
 Nothing listens on a port. The laptop connects outbound to public relays,
 publishes signed events, and reads what comes back as data. A static page
@@ -75,6 +75,17 @@ python sit.py breathe --sit <id> --key quiet-one --bow --text "A room with the l
 Useful flags: `--dry` (scripted mind, no model), `--offline` (host only, no
 relays), `--bell 20`, `--breaths 40`, `--mode focused|open|analytic|koan`,
 `--subject`, `--anchor`, `--resume` (host, reuse the last sit id).
+
+### Rings
+
+A sit can widen. Set `anchors` in `sit.toml` to a list and `ring_bells` to
+how many bells each ring lasts; the host starts on the first anchor, moves
+to the next on schedule, and stays on the last. Every bell carries the
+current anchor, so joiners widen with the host and the room page shows the
+ring. The mind is told once, in place of a nudge: "The circle widens. A new
+anchor." The shipped configuration is a loving-kindness sit in four rings:
+someone easy to love, a stranger, someone difficult, everyone alive.
+`--anchor` on the command line switches the rings off for that sit.
 
 ## The room
 
