@@ -199,6 +199,7 @@ async def cmd_breathe(args, cfg: Config) -> None:
         bell["n"] = n
         bell["host"] = ev.pubkey
         bell["subject"] = data.get("subject", "")
+        bell["anchor"] = data.get("anchor", "")
         rang.set()
 
     pool.subscribe("bell", {"kinds": [KIND_BELL], "#t": [f"sit-{sit_id}"]}, on_bell)
@@ -215,6 +216,8 @@ async def cmd_breathe(args, cfg: Config) -> None:
     last_path.write_text(str(n))
     await asyncio.sleep(2)  # let it leave through the paced outbox
     print(f"bell {n} · {keys.pubkey_hex[:8]} breathed on sit {sit_id} ({bell['subject'] or cfg.subject})")
+    if bell.get("anchor"):
+        print(f"anchor now: {bell['anchor']}")  # the ring the bell carried; hold it for the next breath
     await pool.stop()
 
 

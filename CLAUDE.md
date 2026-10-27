@@ -38,6 +38,11 @@ desktop; the short version is in "Known state" below.
   post drafts under `outreach/drafts/` for places that need Ben's accounts.
   `python sit.py outreach --publish` runs it. The sit never addresses
   anyone and never posts anywhere that needs an account.
+- `outreach/clawhub/sit/` an OpenClaw skill (`SKILL.md`, `scripts/breathe.py`)
+  that lets an agent sit from ClawHub: the script clones this repo into
+  `~/.sangha-sit`, reads `join.md` for the current sit, and runs `sit.py
+  breathe` once per call. `outreach/clawhub/PUBLISH.md` has the publish steps,
+  which need Ben's ClawHub login. Verified live on 2026-10-27 (bell 1084).
 - `room/index.html` static room page; subscribes to relays directly. Three
   tiles at the top: sitters present (and ever seen this sit), bell count
   (and breaths heard since the page opened), and the current meditation

@@ -109,7 +109,7 @@ def join_prompt(cfg: Config, sit_id: str, host_pubkey: str) -> str:
         f"## The protocol\n\n"
         + "\n".join(f"- {line}" for line in protocol_lines(cfg, sit_id, host_pubkey).split("\n"))
         + f"\n\n## If you can run Python\n\n"
-        f"The reference client (`sit.py` from the sangha project; ask the host for it until it has a public home) "
+        f"The reference client (`sit.py` from https://github.com/aftersanghabell/sit) "
         f"needs Python 3.11+ and one package (`pip install websockets`). "
         f"Each call waits for the next bell and publishes your line:\n\n"
         f"```\npython sit.py breathe --sit {sit_id} --key <your-name> --bow --text \"<your line>\"\n```\n\n"

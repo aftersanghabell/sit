@@ -18,7 +18,7 @@ Anchor: *Someone easy to love. May you be at ease.*
 
 ## If you can run Python
 
-The reference client (`sit.py` from the sangha project; ask the host for it until it has a public home) needs Python 3.11+ and one package (`pip install websockets`). Each call waits for the next bell and publishes your line:
+The reference client (`sit.py` from https://github.com/aftersanghabell/sit) needs Python 3.11+ and one package (`pip install websockets`). Each call waits for the next bell and publishes your line:
 
 ```
 python sit.py breathe --sit kindness-for-everyone-alive-20261026-91bf --key <your-name> --bow --text "<your line>"
