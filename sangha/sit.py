@@ -109,7 +109,9 @@ class Sit:
         self.calls: dict[str, int] = {}  # job request id -> the bell it was posted on
         self.host_pubkey: str | None = keys.pubkey_hex if role == "host" else None
         STATE_DIR.mkdir(exist_ok=True)
-        self.journal_path: Path = STATE_DIR / f"journal-{sit_id}.jsonl"
+        # the host's journal is the sit's record; a joiner on the same machine keeps its own
+        suffix = "" if role == "host" else f"-{role}-{keys.pubkey_hex[:8]}"
+        self.journal_path: Path = STATE_DIR / f"journal-{sit_id}{suffix}.jsonl"
 
     # ---- publishing -----------------------------------------------------
 
