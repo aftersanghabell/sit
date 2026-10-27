@@ -209,10 +209,10 @@ class OllamaBackend(Backend):
             except OSError:
                 pass
 
-    def _request(self, path: str, data: bytes, timeout: float) -> dict:
+    def _request(self, method: str, path: str, data: bytes | None, timeout: float) -> dict:
         conn = self._open()
         conn.sock.settimeout(timeout)  # connect was short; a generate may take a while
-        conn.request("POST", path, body=data, headers={"Content-Type": "application/json", "Connection": "keep-alive"})
+        conn.request(method, path, body=data, headers={"Content-Type": "application/json", "Connection": "keep-alive"})
         resp = conn.getresponse()
         raw = resp.read()
         if resp.will_close:
@@ -222,12 +222,14 @@ class OllamaBackend(Backend):
         return json.loads(raw.decode())
 
     def _post(self, path: str, body: dict, timeout: float = 120.0) -> dict:
-        data = json.dumps(body).encode()
+        return self._call("POST", path, json.dumps(body).encode(), timeout)
+
+    def _call(self, method: str, path: str, data: bytes | None, timeout: float) -> dict:
         last: Exception | None = None
         with self._lock:
             for attempt in range(1, self._attempts + 1):
                 try:
-                    return self._request(path, data, timeout)
+                    return self._request(method, path, data, timeout)
                 except urllib.error.HTTPError as exc:
                     # 5xx: the server or its model runner stumbled (seen once as a
                     # 500 while a second model was loading); retry, then skip the
@@ -312,10 +314,12 @@ class OllamaBackend(Backend):
             return None
 
     def available(self) -> tuple[bool, str]:
+        # the same persistent, retrying path as every other call: a one-off
+        # connection with a short timeout was the one place a stale-port drop
+        # could still stop a sit before it began
         try:
-            with urllib.request.urlopen(self.host + "/api/tags", timeout=3) as resp:
-                tags = json.loads(resp.read().decode())
-        except (urllib.error.URLError, OSError) as exc:
+            tags = self._call("GET", "/api/tags", None, 15.0)
+        except BackendUnavailable as exc:
             return False, f"Ollama not reachable at {self.host}: {exc}"
         names = {m.get("name", "") for m in tags.get("models", [])}
         bases = {n.split(":")[0] for n in names}
