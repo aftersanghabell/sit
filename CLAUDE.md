@@ -121,6 +121,19 @@ desktop; the short version is in "Known state" below.
   old sense, `close` skips the reflection. The sit never stops a process.
   The old TIME_WAIT rows clear on their own or at a reboot. A stray
   `ollama.exe launch claude` process was also running; not the cause.
+- The second cause of slow bells and "every relay dropped at once"
+  (2026-10-27 morning): the call's subscription (kinds 6050/7000, `#p`
+  host) had no `since`, and relays replayed ~900 stored answers and
+  feedback events per reconnect; `Event.verify` is pure Python (~120 ms
+  under load) and runs on the loop thread, so each reconnect blocked the
+  loop ~100 s, pings timed out, every relay dropped, and the replay ran
+  again. Bells took two minutes and relays rejected the late breaths as
+  "ephemeral event expired". Fix in `RelayPool`: `subscribe(..., fresh=
+  True)` stamps `since = now - 90` on every (re)send, inbound events older
+  than 600 s are dropped before verification, de-dup runs before
+  verification, and queued ephemeral events older than 20 s are dropped
+  instead of sent. A joiner also ignores a replayed bell older than two
+  intervals. Standalone, a breath is 2.5 s and the loop never stalls.
 - The ringer (2026-10-27): `sangha/identity.py`. One permanent identity
   rings, named keisu, same key as before (880d7839...). Private key in
   `.sit/ringer.bin`, DPAPI user scope with app entropy, public half in

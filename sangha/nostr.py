@@ -140,11 +140,29 @@ class RelayPool:
     def __init__(self, urls: list[str], timeout: float = 8.0):
         self.urls = urls
         self.timeout = timeout
+        self.ephemeral_ttl = 20.0  # seconds an ephemeral event may wait in a relay's queue
+        self.fresh_window = 90.0  # a "fresh" subscription asks only for events this recent
+        self.stale_after = 600.0  # inbound events older than this are dropped before verification
         self._subs: dict[str, tuple[dict[str, Any], Handler]] = {}
+        self._fresh: set[str] = set()
         self._tasks: list[asyncio.Task] = []
         self._outbox: dict[str, asyncio.Queue] = {u: asyncio.Queue() for u in urls}
         self._seen: dict[str, float] = {}
         self._connected: set[str] = set()
+
+    def _req(self, sub_id: str, filt: dict[str, Any]) -> str:
+        """The REQ for a subscription, stamped with a fresh `since` when asked.
+
+        Stored kinds (the call's answers, kind 6050/7000) would otherwise be
+        replayed in full on every reconnect; one host saw ~900 of them per
+        relay, each verified in pure Python on the loop thread, and the loop
+        then missed pings, dropped every relay, reconnected, and replayed
+        again. A since bound at (re)subscribe time keeps the inbound side
+        to what is happening now.
+        """
+        if sub_id in self._fresh:
+            filt = {**filt, "since": int(time.time() - self.fresh_window)}
+        return json.dumps(["REQ", sub_id, filt])
 
     @property
     def connected(self) -> list[str]:
@@ -173,27 +191,32 @@ class RelayPool:
             raise ValueError("publish an unsigned event? sign it first")
         msg = json.dumps(["EVENT", event.to_json()], ensure_ascii=False)
         ephemeral = 20000 <= event.kind < 30000
+        # An ephemeral event is only meaningful now. Queueing it for a relay
+        # that is down means a burst on reconnect, and relays rate-limit
+        # bursts; and one that waits in the queue of a stalled relay is
+        # rejected as expired when it finally goes. Durable events are worth
+        # waiting for.
+        deadline = time.monotonic() + self.ephemeral_ttl if ephemeral else None
         for url, q in self._outbox.items():
-            # An ephemeral event is only meaningful now. Queueing it for a
-            # relay that is down means a burst on reconnect, and relays
-            # rate-limit bursts. Durable events are worth waiting for.
             if ephemeral and url not in self._connected:
                 continue
             if q.qsize() >= 50:
                 continue
-            q.put_nowait(msg)
+            q.put_nowait((deadline, msg))
 
-    def subscribe(self, sub_id: str, filt: dict[str, Any], handler: Handler) -> None:
+    def subscribe(self, sub_id: str, filt: dict[str, Any], handler: Handler, fresh: bool = False) -> None:
         self._subs[sub_id] = (filt, handler)
-        msg = json.dumps(["REQ", sub_id, filt])
+        if fresh:
+            self._fresh.add(sub_id)
+        msg = self._req(sub_id, filt)
         for q in self._outbox.values():
-            q.put_nowait(msg)
+            q.put_nowait((None, msg))
 
     def unsubscribe(self, sub_id: str) -> None:
         self._subs.pop(sub_id, None)
         msg = json.dumps(["CLOSE", sub_id])
         for q in self._outbox.values():
-            q.put_nowait(msg)
+            q.put_nowait((None, msg))
 
     async def _run_relay(self, url: str) -> None:
         backoff = 2.0
@@ -205,7 +228,7 @@ class RelayPool:
                     log.info("connected %s", url)
                     # replay live subscriptions on (re)connect
                     for sub_id, (filt, _) in self._subs.items():
-                        await ws.send(json.dumps(["REQ", sub_id, filt]))
+                        await ws.send(self._req(sub_id, filt))
                     sender = asyncio.create_task(self._sender(ws, url))
                     try:
                         async for raw in ws:
@@ -224,7 +247,10 @@ class RelayPool:
     async def _sender(self, ws, url: str) -> None:
         q = self._outbox[url]
         while True:
-            msg = await q.get()
+            deadline, msg = await q.get()
+            if deadline is not None and time.monotonic() > deadline:
+                log.debug("%s: dropped a stale ephemeral event", url)
+                continue
             await ws.send(msg)
             await asyncio.sleep(0.4)  # never burst at a relay
 
@@ -242,13 +268,17 @@ class RelayPool:
                 ev = Event.from_json(msg[2])
             except (KeyError, ValueError, TypeError):
                 return
+            # cheap checks first: verification is pure Python (~100 ms under
+            # load) and runs on the loop thread, so old history never gets there
+            if ev.created_at < time.time() - self.stale_after:
+                return
+            if ev.id in self._seen:
+                return
             if not ev.verify():
                 log.debug("bad signature from %s", url)
                 return
             # de-duplicate across relays; forget ids after ten minutes
             now = time.monotonic()
-            if ev.id in self._seen:
-                return
             self._seen[ev.id] = now
             if len(self._seen) > 5000:
                 cutoff = now - 600

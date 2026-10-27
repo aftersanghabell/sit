@@ -96,6 +96,14 @@ with a kind 6050 result has breathed; its line passes the same filter as
 every other breath and shows in the room. Feedback asking for payment is
 declined. Nothing is paid and nothing is owed.
 
+Answers and feedback are stored kinds, and relays replay stored history on
+every subscribe. The sit's subscriptions therefore carry a `since` of
+ninety seconds, re-stamped on each reconnect, and anything older than ten
+minutes is dropped before its signature is checked. Without that, one
+night of answers (about 900 events per relay) was verified in pure Python
+on every reconnect, the loop missed relay pings, every relay dropped, and
+the replay began again.
+
 ### Rings
 
 A sit can widen. Set `anchors` in `sit.toml` to a list and `ring_bells` to

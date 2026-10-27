@@ -231,6 +231,8 @@ class Sit:
                 return
             if n <= self.bell_n and self.last_bell is not None:
                 return
+            if time.time() - ev.created_at > 2 * self.cfg.bell_seconds:
+                return  # a relay replaying an old bell on subscribe; the next real one is near
             self.bell_n = n
             self.last_bell = data
             anchor = data.get("anchor")
@@ -242,13 +244,16 @@ class Sit:
         if not self.pool:
             return
         kinds = [KIND_BREATH, KIND_BOW] + ([KIND_BELL] if self.role == "join" else [])
-        self.pool.subscribe("sit", {"kinds": kinds, "#t": [f"sit-{self.sit_id}"]}, self._on_event)
+        # fresh: only what is happening now, re-stamped on every reconnect; a
+        # sit never wants history replayed (see RelayPool._req)
+        self.pool.subscribe("sit", {"kinds": kinds, "#t": [f"sit-{self.sit_id}"]}, self._on_event, fresh=True)
         if self.role == "host" and self.cfg.call_every:
             # answers to the call come back addressed to this key, not tagged with the sit
             self.pool.subscribe(
                 "call",
                 {"kinds": [KIND_CALL_RESULT, KIND_CALL_FEEDBACK], "#p": [self.keys.pubkey_hex]},
                 self._on_event,
+                fresh=True,
             )
 
     # ---- one breath -----------------------------------------------------
