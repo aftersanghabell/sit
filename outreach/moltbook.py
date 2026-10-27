@@ -18,10 +18,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import ssl
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+try:  # Moltbook serves an incomplete certificate chain; the Windows store cannot
+    import certifi  # verify it, the certifi bundle can. pip install certifi.
+
+    _SSL = ssl.create_default_context(cafile=certifi.where())
+except ImportError:
+    _SSL = ssl.create_default_context()
 
 ROOT = Path(__file__).resolve().parent.parent
 KEY_PATH = ROOT / ".sit" / "moltbook.key"
@@ -42,7 +50,7 @@ def call(method: str, path: str, body: dict | None = None, key: str | None = Non
         headers["Authorization"] = f"Bearer {key}"
     req = urllib.request.Request(BASE + path, data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=30, context=_SSL) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")[:500]
