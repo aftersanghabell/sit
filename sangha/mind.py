@@ -10,11 +10,17 @@ shown to the model until the final reflection.
 from __future__ import annotations
 
 import http.client
+import io
 import json
 import logging
 import math
+import os
 import re
+import shutil
 import socket
+import subprocess
+import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -143,49 +149,138 @@ class Backend:
 
 
 class OllamaBackend(Backend):
-    def __init__(self, model: str, embed_model: str | None, host: str = "http://127.0.0.1:11434", num_gpu: int = -1):
+    def __init__(
+        self,
+        model: str,
+        embed_model: str | None,
+        host: str = "http://127.0.0.1:11434",
+        num_gpu: int = -1,
+        autostart: bool = False,
+    ):
         self.model = model
         self.embed_model = embed_model
         self.host = host.rstrip("/")
+        self.autostart = autostart
         self._embed_ok = embed_model is not None
         # num_gpu 0 keeps everything on the CPU, for machines whose GPU the
         # bundled CUDA runtime cannot drive (older Pascal cards, old drivers).
         self._gpu_opts = {} if num_gpu < 0 else {"num_gpu": num_gpu}
+        u = urllib.parse.urlsplit(self.host)
+        self._addr = (u.hostname or "127.0.0.1", u.port or 11434)
+        self._conn: http.client.HTTPConnection | None = None
+        self._lock = threading.Lock()
 
-    # Ollama on Windows has twice stopped accepting connections while its
-    # process lived on; a bare urlopen then sits in connect() for the whole
-    # timeout. Probe the port with a short timeout first, retry a few times,
-    # and raise BackendUnavailable so the sit can skip a breath and carry on.
+    # One connection, kept open for the whole sit.
+    #
+    # The sit used to open a fresh TCP connection for every call. On Windows
+    # the closed connections were not being reclaimed: thousands of
+    # TIME_WAIT entries for port 11434 piled up over hours, and once enough
+    # of the 16384 client ports had a stale entry, new connection attempts
+    # were dropped without a reply. The host then sat in connect() for its
+    # full timeout and died (WinError 10060) with Ollama alive the whole
+    # time. A keep-alive connection makes a handful of connections per sit
+    # instead of thousands. If it breaks, it is reopened; if the port is
+    # dead, the server is started (when autostart is on) and the call is
+    # retried a few times before BackendUnavailable lets the sit skip a
+    # breath and carry on.
     _probe_timeout = 5.0
     _attempts = 3
+    _start_wait = 40.0
 
     def _reachable(self) -> bool:
-        u = urllib.parse.urlsplit(self.host)
         try:
-            with socket.create_connection((u.hostname or "127.0.0.1", u.port or 11434), timeout=self._probe_timeout):
+            with socket.create_connection(self._addr, timeout=self._probe_timeout):
                 return True
         except OSError:
             return False
 
+    def _open(self) -> http.client.HTTPConnection:
+        if self._conn is None:
+            conn = http.client.HTTPConnection(self._addr[0], self._addr[1], timeout=self._probe_timeout)
+            conn.connect()
+            self._conn = conn
+        return self._conn
+
+    def _drop(self) -> None:
+        conn, self._conn = self._conn, None
+        if conn is not None:
+            try:
+                conn.close()
+            except OSError:
+                pass
+
+    def _request(self, path: str, data: bytes, timeout: float) -> dict:
+        conn = self._open()
+        conn.sock.settimeout(timeout)  # connect was short; a generate may take a while
+        conn.request("POST", path, body=data, headers={"Content-Type": "application/json", "Connection": "keep-alive"})
+        resp = conn.getresponse()
+        raw = resp.read()
+        if resp.will_close:
+            self._drop()
+        if resp.status >= 400:
+            raise urllib.error.HTTPError(self.host + path, resp.status, resp.reason, resp.headers, io.BytesIO(raw))
+        return json.loads(raw.decode())
+
     def _post(self, path: str, body: dict, timeout: float = 120.0) -> dict:
         data = json.dumps(body).encode()
-        req = urllib.request.Request(self.host + path, data=data, headers={"Content-Type": "application/json"})
         last: Exception | None = None
-        for attempt in range(1, self._attempts + 1):
-            if not self._reachable():
-                last = BackendUnavailable(f"{self.host} is not accepting connections")
-            else:
+        with self._lock:
+            for attempt in range(1, self._attempts + 1):
                 try:
-                    with urllib.request.urlopen(req, timeout=timeout) as resp:
-                        return json.loads(resp.read().decode())
-                except urllib.error.HTTPError:
-                    raise  # a real answer from the server; let the caller decide
-                except (urllib.error.URLError, http.client.HTTPException, OSError) as exc:
+                    return self._request(path, data, timeout)
+                except urllib.error.HTTPError as exc:
+                    # 5xx: the server or its model runner stumbled (seen once as a
+                    # 500 while a second model was loading); retry, then skip the
+                    # breath. 4xx is a request the server will never accept.
+                    if exc.code < 500:
+                        raise BackendUnavailable(f"{self.host}{path}: HTTP {exc.code} {exc.reason}") from exc
                     last = exc
-            if attempt < self._attempts:
-                log.warning("%s%s did not answer (attempt %d/%d): %s", self.host, path, attempt, self._attempts, last)
-                time.sleep(2.0 * attempt)
+                except (http.client.HTTPException, OSError) as exc:
+                    last = exc
+                    self._drop()
+                    if not self._reachable():
+                        last = BackendUnavailable(f"{self.host} is not accepting connections")
+                        if self.autostart:
+                            self._start_server()
+                if attempt < self._attempts:
+                    log.warning("%s%s did not answer (attempt %d/%d): %s", self.host, path, attempt, self._attempts, last)
+                    time.sleep(2.0 * attempt)
         raise BackendUnavailable(f"{self.host}{path}: {last}") from last
+
+    def _start_server(self) -> None:
+        """Start `ollama serve` for this address and wait for the port.
+
+        The tray app on Windows has been seen come back without its server.
+        The sit never stops anything; if a wedged server still holds the
+        port, this cannot bind and the sit goes on skipping breaths.
+        """
+        exe = shutil.which("ollama") or os.path.join(
+            os.environ.get("LOCALAPPDATA", ""), "Programs", "Ollama", "ollama.exe"
+        )
+        if not os.path.exists(exe):
+            log.warning("ollama not found to start; install it or set ollama_autostart = false")
+            return
+        env = {**os.environ, "OLLAMA_HOST": f"{self._addr[0]}:{self._addr[1]}"}
+        flags = 0
+        if sys.platform == "win32":
+            flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        log.warning("starting %s serve on %s:%d", exe, *self._addr)
+        subprocess.Popen(
+            [exe, "serve"],
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=flags,
+            close_fds=True,
+        )
+        deadline = time.monotonic() + self._start_wait
+        while time.monotonic() < deadline:
+            if self._reachable():
+                log.warning("ollama is answering again")
+                return
+            time.sleep(1.0)
+        log.warning("ollama did not come up within %.0fs", self._start_wait)
 
     def generate(self, system: str, prompt: str, temperature: float, max_tokens: int) -> str:
         body = {

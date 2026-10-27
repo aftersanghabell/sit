@@ -105,15 +105,29 @@ desktop; the short version is in "Known state" below.
   "Warmth." eight bells running; the rumination nudge does not move it.
   A stronger nudge, a temperature bump after a nudge, or focused mode are
   the things to try.
-- Ollama on Ben's laptop twice (2026-10-26, 15:45 and 18:13) stopped
-  accepting TCP connections while its process stayed alive; the host died
-  in `distill` with WinError 10060 after the 120 s connect wait. The tray
-  app restarted without its server; `ollama serve` run by hand came back.
-  `OllamaBackend._post` now probes the port (5 s), retries three times and
-  raises `BackendUnavailable`; `Sit.breathe_once` returns None on it and
-  the loops skip that breath, `settle` keeps the old sense, `close` skips
-  the reflection. About 875 TIME_WAIT sockets sat on port 11434 at the
-  time, not growing; source unknown.
+- The Ollama "hang", diagnosed 2026-10-27: Ollama never hung. The sit
+  opened a new TCP connection per call (urllib, Connection: close) and on
+  this laptop the closed connections are not reclaimed: TIME_WAIT rows for
+  port 11434 went 875 → 4592 over the evening of 2026-10-26 and did not
+  fall while nothing ran. Once enough of the 16384 dynamic client ports
+  carried a stale server-side entry, SYNs were dropped silently and the
+  host died in `distill` with WinError 10060 (15:45 and 18:13). Fix:
+  `OllamaBackend` keeps one keep-alive `http.client` connection for the
+  whole sit (8 calls added 0 rows in the test), probes the port (5 s)
+  before retrying, starts `ollama serve` itself when the port is dead
+  (`ollama_autostart`, since the tray app came back without its server),
+  and raises `BackendUnavailable` after three attempts; `Sit.breathe_once`
+  returns None on it and the loops skip that breath, `settle` keeps the
+  old sense, `close` skips the reflection. The sit never stops a process.
+  The old TIME_WAIT rows clear on their own or at a reboot. A stray
+  `ollama.exe launch claude` process was also running; not the cause.
+- The ringer (2026-10-27): `sangha/identity.py`. One permanent identity
+  rings, named keisu, same key as before (880d7839...). Private key in
+  `.sit/ringer.bin`, DPAPI user scope with app entropy, public half in
+  `.sit/ringer.json`; `Ringer.load_or_adopt` took `.sit/key.hex`,
+  verified the round trip, zeroed and removed the plaintext. host, invite,
+  outreach and keys use it; join and breathe default to `--key sitter` and
+  never touch it. Instruction comes only from local files.
 - `join --key NAME` gives a joiner on the host's machine its own identity
   (`.sit/key-NAME.hex`); without it the host filters the joiner as itself.
   Verified: still-water joined sit 91bf at bells 170-173 and the host's

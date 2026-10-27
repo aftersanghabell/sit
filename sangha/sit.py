@@ -260,7 +260,9 @@ class Sit:
             thought = await asyncio.to_thread(self.mind.breathe, self.state)
             if not thought:
                 thought = "(silence)"
-            nudge = self.mind.observe(thought, self.state)
+            # observe embeds the thought: a network call, so off the loop thread
+            # (a blocked loop misses relay pings and every relay drops at once)
+            nudge = await asyncio.to_thread(self.mind.observe, thought, self.state)
         except BackendUnavailable as exc:
             log.warning("no breath on bell %d: %s", n, exc)
             print(f"[{n:4d}] (no breath; the model server is not answering)", flush=True)

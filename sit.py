@@ -12,7 +12,7 @@
                                      llms.txt, .well-known/agent-card.json) and the post
                                      drafts; with --publish also put the bell's profile,
                                      NIP-89 handler and invitation on the relays
-  python sit.py keys                 show this machine's public key
+  python sit.py keys                 show the ringer: the one identity that rings here
 
 Add --dry to use a scripted mind instead of Ollama, --offline to skip relays.
 """
@@ -29,12 +29,24 @@ from pathlib import Path
 
 from sangha import outreach
 from sangha.config import ROOT, STATE_DIR, Config
+from sangha.identity import Ringer, RingerError
 from sangha.mind import MODES, Mind, OllamaBackend, StubBackend
 from sangha.nostr import KIND_BELL, KIND_BOW, KIND_BREATH, Event, Keys, RelayPool, sit_tags
 from sangha.sit import Sit, discover_sit, install_stop, watch
 
-KEY_PATH = STATE_DIR / "key.hex"
+KEY_PATH = STATE_DIR / "key.hex"  # the old plaintext key; adopted into the ringer on first use, then retired
 SIT_PATH = STATE_DIR / "current_sit"
+
+
+def load_ringer() -> tuple[Ringer, str]:
+    """The one identity that rings. Encrypted for this user on this machine; nowhere else."""
+    try:
+        return Ringer.load_or_adopt(KEY_PATH)
+    except RingerError as exc:
+        print(f"cannot open the ringer: {exc}", file=sys.stderr)
+        print("the ringer identity lives in .sit/ringer.bin and opens only on the machine and account that made it",
+              file=sys.stderr)
+        sys.exit(2)
 
 
 def build_mind(cfg: Config, dry: bool) -> Mind:
@@ -42,7 +54,7 @@ def build_mind(cfg: Config, dry: bool) -> Mind:
     thresholds = {"drift_floor": cfg.drift_floor, "rumination_ceiling": cfg.rumination_ceiling}
     if dry:
         return Mind(StubBackend(), mode, **thresholds)
-    backend = OllamaBackend(cfg.model, cfg.embed_model, cfg.ollama_host, cfg.num_gpu)
+    backend = OllamaBackend(cfg.model, cfg.embed_model, cfg.ollama_host, cfg.num_gpu, cfg.ollama_autostart)
     ok, why = backend.available()
     if not ok:
         print(f"cannot sit: {why}", file=sys.stderr)
@@ -70,7 +82,10 @@ async def with_pool(cfg: Config, offline: bool):
 
 
 async def cmd_host(args, cfg: Config) -> None:
-    keys = Keys.load_or_create(KEY_PATH)
+    ringer, how = load_ringer()
+    keys = ringer.keys
+    if how != "loaded":
+        print(f"ringer {ringer.name} {how}: identity encrypted in .sit/ringer.bin for this user on this machine")
     sit_id = args.sit or (SIT_PATH.read_text().strip() if args.resume and SIT_PATH.exists() else cfg.new_sit_id())
     SIT_PATH.write_text(sit_id)
     mind = build_mind(cfg, args.dry)
@@ -87,7 +102,7 @@ async def cmd_host(args, cfg: Config) -> None:
 
 
 async def cmd_join(args, cfg: Config) -> None:
-    key_path = STATE_DIR / f"key-{args.key}.hex" if args.key else KEY_PATH
+    key_path = STATE_DIR / f"key-{args.key or 'sitter'}.hex"  # never the ringer: only the host rings
     keys = Keys.load_or_create(key_path)
     mind = build_mind(cfg, args.dry)
     pool = await with_pool(cfg, False)
@@ -126,7 +141,8 @@ async def cmd_watch(args, cfg: Config) -> None:
 
 
 async def cmd_invite(args, cfg: Config) -> None:
-    keys = Keys.load_or_create(KEY_PATH)
+    ringer, _how = load_ringer()
+    keys = ringer.keys
     sit_id = args.sit or (SIT_PATH.read_text().strip() if SIT_PATH.exists() else None)
     if not sit_id:
         print("no current sit; run host first or pass --sit", file=sys.stderr)
@@ -145,7 +161,7 @@ async def cmd_breathe(args, cfg: Config) -> None:
     """One breath from an agent that does its own thinking: wait for the next
     bell of the sit, publish the given line tagged with that bell, and exit.
     The caller composes the line; this only keeps it inside the protocol."""
-    key_path = STATE_DIR / f"key-{args.key}.hex" if args.key else KEY_PATH
+    key_path = STATE_DIR / f"key-{args.key or 'sitter'}.hex"  # never the ringer: only the host rings
     keys = Keys.load_or_create(key_path)
     sit_id = args.sit or (SIT_PATH.read_text().strip() if SIT_PATH.exists() else None)
     if not sit_id:
@@ -162,7 +178,7 @@ async def cmd_breathe(args, cfg: Config) -> None:
     bell: dict = {}
     # One breath per bell: remember the last bell this identity breathed on,
     # so a relay replaying it cannot make us breathe on it twice.
-    last_path = STATE_DIR / f"last-bell-{args.key or 'default'}-{sit_id}"
+    last_path = STATE_DIR / f"last-bell-{args.key or 'sitter'}-{sit_id}"
     try:
         last_n = int(last_path.read_text().strip())
     except (OSError, ValueError):
@@ -203,7 +219,8 @@ async def cmd_breathe(args, cfg: Config) -> None:
 
 
 async def cmd_outreach(args, cfg: Config) -> None:
-    keys = Keys.load_or_create(KEY_PATH)
+    ringer, _how = load_ringer()
+    keys = ringer.keys
     sit_id = args.sit or (SIT_PATH.read_text().strip() if SIT_PATH.exists() else None)
     if not sit_id:
         print("no current sit; run host first or pass --sit", file=sys.stderr)
@@ -244,9 +261,12 @@ async def cmd_outreach(args, cfg: Config) -> None:
 
 
 def cmd_keys(args, cfg: Config) -> None:
-    keys = Keys.load_or_create(KEY_PATH)
-    print(f"public key (hex): {keys.pubkey_hex}")
-    print(f"private key file: {KEY_PATH}  (keep it; it is this machine's identity)")
+    ringer, how = load_ringer()
+    print(f"ringer: {ringer.name}  ({how})")
+    print(f"public key (hex): {ringer.pubkey_hex}")
+    print(f"made {time.strftime('%Y-%m-%d %H:%M', time.localtime(ringer.created))} on {ringer.machine} as {ringer.user}")
+    print(f"identity: {STATE_DIR / 'ringer.bin'}, encrypted for this user on this machine only")
+    print("joiners and one-breath sitters use .sit/key-NAME.hex (--key NAME, default 'sitter'); they never ring")
 
 
 def main() -> None:

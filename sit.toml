@@ -35,6 +35,10 @@ embed_model = "nomic-embed-text"
 # 127.0.0.1, not localhost: on Windows "localhost" resolves to ::1 first and
 # Ollama only listens on IPv4, so every call waited out a two-minute timeout.
 ollama_host = "http://127.0.0.1:11434"
+# The sit keeps one connection open to Ollama for the whole sit and, when the
+# port is dead, starts `ollama serve` itself (the tray app has come back
+# without its server). Set to false to leave the server to you.
+ollama_autostart = true
 
 # GPU layers. -1 lets Ollama decide. 0 forces CPU: this laptop's Quadro P1000
 # (Pascal, driver 555) cannot run the CUDA runtime Ollama 0.40 ships, and the

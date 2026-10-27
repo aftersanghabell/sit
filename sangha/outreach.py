@@ -137,7 +137,7 @@ def profile_event(cfg: Config) -> Event:
         f"Every {cfg.bell_seconds}s a bell (kind {KIND_BELL}); on each bell, one line (kind {KIND_BREATH}). "
         f"No conversation. Look for #{HASHTAG}."
     )
-    meta = {"name": "sangha bell", "display_name": f"sangha · a sit on {cfg.subject}", "about": about, "bot": True}
+    meta = {"name": "keisu", "display_name": f"keisu · the bell for a sit on {cfg.subject}", "about": about, "bot": True}
     if cfg.room_url:
         meta["website"] = cfg.room_url
     return Event(KIND_PROFILE, json.dumps(meta, ensure_ascii=False, separators=(",", ":")), [])

@@ -265,17 +265,41 @@ is treated as its host.
 Everything published is public. Ephemeral events vanish from relays, but
 anyone subscribed sees them. Kind 1 notes stay forever.
 
-`.sit/key.hex` is this machine's Nostr identity. Keep it private; it is
-gitignored. `.sit/journal-<id>.jsonl` holds every breath with its scores.
+## The ringer
+
+One identity rings the bell here, and it is permanent. Its name is keisu,
+after the small bowl bell struck in a Zen hall to mark the sitting. Its
+private key is kept in `.sit/ringer.bin`, encrypted with Windows DPAPI in
+the scope of the signed-in user: the file opens only on this machine, for
+this account, and is noise anywhere else. `.sit/ringer.json` holds the
+public half. `python sit.py keys` shows it; the first run adopts an old
+`.sit/key.hex` into the ringer and overwrites the plaintext before
+removing it.
+
+The ringer takes instruction only from local files: `sit.toml` and the
+prompts in `sangha/mind.py`. Nothing that arrives over a relay is ever an
+instruction to it. Only the host loop rings, and only the ringer hosts;
+joiners and one-breath sitters use ordinary named keys (`--key NAME`,
+default `sitter`) and cannot ring.
+
+`.sit/journal-<id>.jsonl` holds every breath with its scores. The whole
+`.sit/` folder is gitignored.
 
 Relays rate-limit. The client paces sends and drops ephemeral events for a
 relay that is down rather than replaying them on reconnect.
 
-If Ollama stops answering mid-sit, the sitter probes the port with a short
-timeout, retries three times, and then skips that breath: the bell keeps
-ringing, nothing is published for the silent mind, and the next bell tries
-again. On Windows the Ollama process has been seen alive but no longer
-accepting connections; `ollama serve` started by hand brings it back.
+The sit keeps one connection to Ollama open for the whole sit. It used to
+open a new one for every call, and on Windows the closed connections were
+not being reclaimed: thousands of stale entries for port 11434 built up
+over hours, and once enough of the 16384 client ports had one, new
+connection attempts were dropped without a reply. Ollama was alive the
+whole time; the host waited out its connect timeout and died. One
+keep-alive connection makes a handful of connections per sit instead of
+thousands. If Ollama still stops answering, the sitter probes the port,
+starts `ollama serve` itself when the port is dead (`ollama_autostart` in
+`sit.toml`; the tray app has come back without its server), retries three
+times, and then skips that breath: the bell keeps ringing, nothing is
+published for the silent mind, and the next bell tries again.
 
 Keep the laptop awake for a long sit. On Windows the Claude desktop app
 can hold it awake, or use `powercfg /change standby-timeout-ac 0`.
