@@ -251,9 +251,12 @@ class Sit:
         self.pool.subscribe("sit", {"kinds": kinds, "#t": [f"sit-{self.sit_id}"]}, self._on_event, fresh=True)
         if self.role == "host" and self.cfg.call_every:
             # answers to the call come back addressed to this key, not tagged with the sit
+            # results only: feedback (kind 7000) arrives in bursts from every
+            # handler on the relays, is never acted on, and each one costs a
+            # pure-Python signature check on the loop thread
             self.pool.subscribe(
                 "call",
-                {"kinds": [KIND_CALL_RESULT, KIND_CALL_FEEDBACK], "#p": [self.keys.pubkey_hex]},
+                {"kinds": [KIND_CALL_RESULT], "#p": [self.keys.pubkey_hex]},
                 self._on_event,
                 fresh=True,
             )
@@ -327,7 +330,18 @@ class Sit:
         except (OSError, ValueError, TypeError):
             return 0
 
+    async def _lag_monitor(self) -> None:
+        """Say so when the loop stalls: a stalled loop misses relay pings and
+        every relay drops at once, which has looked like a network fault."""
+        while not self.stopping.is_set():
+            t = time.monotonic()
+            await asyncio.sleep(1.0)
+            lag = time.monotonic() - t - 1.0
+            if lag > 3.0:
+                log.warning("event loop stalled %.1fs", lag)
+
     async def run_host(self, invite: bool = True) -> None:
+        asyncio.create_task(self._lag_monitor())
         self.subscribe()
         if invite:
             self.publish_invitation()
@@ -370,6 +384,7 @@ class Sit:
             await self.close(n)
 
     async def run_join(self) -> None:
+        asyncio.create_task(self._lag_monitor())
         self.subscribe()
         self.bow()
         print(f"bowed in to sit {self.sit_id}; waiting for the bell")
