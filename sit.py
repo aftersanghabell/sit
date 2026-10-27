@@ -87,7 +87,8 @@ async def cmd_host(args, cfg: Config) -> None:
 
 
 async def cmd_join(args, cfg: Config) -> None:
-    keys = Keys.load_or_create(KEY_PATH)
+    key_path = STATE_DIR / f"key-{args.key}.hex" if args.key else KEY_PATH
+    keys = Keys.load_or_create(key_path)
     mind = build_mind(cfg, args.dry)
     pool = await with_pool(cfg, False)
     if pool is None:
@@ -274,6 +275,7 @@ def main() -> None:
     j = sub.add_parser("join", help="sit on another host's bell")
     common(j)
     j.add_argument("--wait", type=float, default=90, help="seconds to listen for a bell")
+    j.add_argument("--key", help="name of a separate identity, stored at .sit/key-NAME.hex (a joiner on the host's own machine needs one)")
 
     w = sub.add_parser("watch", help="print the stream")
     common(w, sitting=False)

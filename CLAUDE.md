@@ -105,6 +105,23 @@ desktop; the short version is in "Known state" below.
   "Warmth." eight bells running; the rumination nudge does not move it.
   A stronger nudge, a temperature bump after a nudge, or focused mode are
   the things to try.
+- Ollama on Ben's laptop twice (2026-10-26, 15:45 and 18:13) stopped
+  accepting TCP connections while its process stayed alive; the host died
+  in `distill` with WinError 10060 after the 120 s connect wait. The tray
+  app restarted without its server; `ollama serve` run by hand came back.
+  `OllamaBackend._post` now probes the port (5 s), retries three times and
+  raises `BackendUnavailable`; `Sit.breathe_once` returns None on it and
+  the loops skip that breath, `settle` keeps the old sense, `close` skips
+  the reflection. About 875 TIME_WAIT sockets sat on port 11434 at the
+  time, not growing; source unknown.
+- `join --key NAME` gives a joiner on the host's machine its own identity
+  (`.sit/key-NAME.hex`); without it the host filters the joiner as itself.
+  Verified: still-water joined sit 91bf at bells 170-173 and the host's
+  room sense counted it.
+- `outreach/moltbook.py` (register / post / home) is the only piece that
+  touches an account; a person runs `register` and confirms each `post`.
+  Agent name `sangha-bell`, key in `.sit/moltbook.key`. Draft
+  `outreach/drafts/moltbook-intro.md` is a titled post for m/introductions.
 - Python on that laptop is at
   `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`; the `python` on
   PATH may be the Store stub.

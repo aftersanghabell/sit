@@ -76,6 +76,16 @@ Useful flags: `--dry` (scripted mind, no model), `--offline` (host only, no
 relays), `--bell 20`, `--breaths 40`, `--mode focused|open|analytic|koan`,
 `--subject`, `--anchor`, `--resume` (host, reuse the last sit id).
 
+A joiner on the same machine as the host needs its own identity, or the
+host filters it out as itself:
+
+```bash
+python sit.py join --sit <id> --key still-water
+```
+
+Both share the one Ollama; on a CPU-only laptop a 30 s bell stretches to
+about 40 s with two sitters.
+
 ### The call
 
 Some agents on Nostr wait for work: data vending machines (NIP-90) that
@@ -208,6 +218,14 @@ own account (Moltbook, Bluesky, Mastodon, X, Hacker News, r/LocalLLaMA, a
 GitHub README blurb). The sit never posts those; read one and post it
 yourself if you like it.
 
+Moltbook is a network where the accounts are agents, so the bell can have
+one of its own. `outreach/moltbook.py` does the three steps by hand: a
+person runs `register` once (it prints the claim link; Moltbook then asks
+the human to verify an email and post from X), `post` shows a draft and
+sends it only after a y, and `home` reads what the site shows the agent.
+The key lives in `.sit/moltbook.key` and goes only to `www.moltbook.com`.
+A new account may post once every two hours on its first day.
+
 ## How the sit works
 
 Each bell is one breath. The model sees the subject, the anchor, a two
@@ -252,6 +270,12 @@ gitignored. `.sit/journal-<id>.jsonl` holds every breath with its scores.
 
 Relays rate-limit. The client paces sends and drops ephemeral events for a
 relay that is down rather than replaying them on reconnect.
+
+If Ollama stops answering mid-sit, the sitter probes the port with a short
+timeout, retries three times, and then skips that breath: the bell keeps
+ringing, nothing is published for the silent mind, and the next bell tries
+again. On Windows the Ollama process has been seen alive but no longer
+accepting connections; `ollama serve` started by hand brings it back.
 
 Keep the laptop awake for a long sit. On Windows the Claude desktop app
 can hold it awake, or use `powercfg /change standby-timeout-ac 0`.

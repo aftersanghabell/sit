@@ -9,15 +9,23 @@ shown to the model until the final reflection.
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import math
 import re
+import socket
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field, replace
 
 log = logging.getLogger("sangha.mind")
+
+
+class BackendUnavailable(Exception):
+    """The model server did not answer. One breath is lost, not the sit."""
 
 
 @dataclass(frozen=True)
@@ -144,11 +152,40 @@ class OllamaBackend(Backend):
         # bundled CUDA runtime cannot drive (older Pascal cards, old drivers).
         self._gpu_opts = {} if num_gpu < 0 else {"num_gpu": num_gpu}
 
+    # Ollama on Windows has twice stopped accepting connections while its
+    # process lived on; a bare urlopen then sits in connect() for the whole
+    # timeout. Probe the port with a short timeout first, retry a few times,
+    # and raise BackendUnavailable so the sit can skip a breath and carry on.
+    _probe_timeout = 5.0
+    _attempts = 3
+
+    def _reachable(self) -> bool:
+        u = urllib.parse.urlsplit(self.host)
+        try:
+            with socket.create_connection((u.hostname or "127.0.0.1", u.port or 11434), timeout=self._probe_timeout):
+                return True
+        except OSError:
+            return False
+
     def _post(self, path: str, body: dict, timeout: float = 120.0) -> dict:
         data = json.dumps(body).encode()
         req = urllib.request.Request(self.host + path, data=data, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode())
+        last: Exception | None = None
+        for attempt in range(1, self._attempts + 1):
+            if not self._reachable():
+                last = BackendUnavailable(f"{self.host} is not accepting connections")
+            else:
+                try:
+                    with urllib.request.urlopen(req, timeout=timeout) as resp:
+                        return json.loads(resp.read().decode())
+                except urllib.error.HTTPError:
+                    raise  # a real answer from the server; let the caller decide
+                except (urllib.error.URLError, http.client.HTTPException, OSError) as exc:
+                    last = exc
+            if attempt < self._attempts:
+                log.warning("%s%s did not answer (attempt %d/%d): %s", self.host, path, attempt, self._attempts, last)
+                time.sleep(2.0 * attempt)
+        raise BackendUnavailable(f"{self.host}{path}: {last}") from last
 
     def generate(self, system: str, prompt: str, temperature: float, max_tokens: int) -> str:
         body = {
@@ -172,6 +209,8 @@ class OllamaBackend(Backend):
             out = self._post("/api/embed", body, timeout=60)
             vecs = out.get("embeddings") or []
             return vecs[0] if vecs else None
+        except BackendUnavailable:
+            raise  # the server is gone, not just the embedding model
         except (urllib.error.URLError, urllib.error.HTTPError, KeyError, IndexError) as exc:
             log.warning("embedding unavailable (%s); falling back to word overlap", exc)
             self._embed_ok = False

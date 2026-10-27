@@ -19,7 +19,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from .config import STATE_DIR, Config
-from .mind import MODES, Distilled, Mind, Nudge
+from .mind import MODES, BackendUnavailable, Distilled, Mind, Nudge
 from .outreach import invitation_event, manifest_event
 from .nostr import (
     HASHTAG,
@@ -253,12 +253,19 @@ class Sit:
 
     # ---- one breath -----------------------------------------------------
 
-    async def breathe_once(self, n: int) -> tuple[str, Nudge]:
-        thought = await asyncio.to_thread(self.mind.breathe, self.state)
-        if not thought:
-            thought = "(silence)"
+    async def breathe_once(self, n: int) -> tuple[str, Nudge] | None:
+        """One breath. None when the model server is unreachable: the bell
+        still rang, the room is still heard, nothing is published."""
+        try:
+            thought = await asyncio.to_thread(self.mind.breathe, self.state)
+            if not thought:
+                thought = "(silence)"
+            nudge = self.mind.observe(thought, self.state)
+        except BackendUnavailable as exc:
+            log.warning("no breath on bell %d: %s", n, exc)
+            print(f"[{n:4d}] (no breath; the model server is not answering)", flush=True)
+            return None
         self.publish_breath(n, thought)
-        nudge = self.mind.observe(thought, self.state)
         self.journal.append(thought)
         print(f"[{n:4d}] {thought}", flush=True)
         if nudge.kind != "none":
@@ -267,8 +274,14 @@ class Sit:
 
     async def settle(self, n: int, thought: str, nudge: Nudge) -> None:
         others = self.incoming.breaths_for(n)
-        room = await asyncio.to_thread(self.mind.sense_of_room, others) if others else ""
-        distilled = await asyncio.to_thread(self.mind.distill, self.state, thought, nudge, room)
+        try:
+            room = await asyncio.to_thread(self.mind.sense_of_room, others) if others else ""
+            distilled = await asyncio.to_thread(self.mind.distill, self.state, thought, nudge, room)
+        except BackendUnavailable as exc:
+            # the breath was taken and published; carry the sense forward unchanged
+            log.warning("no distill on bell %d: %s", n, exc)
+            room = ""
+            distilled = self.state
         # a joiner may have been widened by a bell while the distill ran; keep the newer anchor
         self.state = replace(distilled, anchor=self.state.anchor, nudge=self.state.nudge or distilled.nudge)
         with self.journal_path.open("a", encoding="utf-8") as f:
@@ -325,7 +338,7 @@ class Sit:
                 self.ring_bell(n)
                 if self.pool and self.cfg.call_every and (n - 1) % self.cfg.call_every == 0:
                     self.call(n)
-                thought, nudge = await self.breathe_once(n)
+                breath = await self.breathe_once(n)
                 # the rest of the bell is for listening
                 remaining = self.cfg.bell_seconds - (time.monotonic() - started)
                 if remaining > 0:
@@ -333,6 +346,9 @@ class Sit:
                         await asyncio.wait_for(self.stopping.wait(), timeout=remaining)
                     except asyncio.TimeoutError:
                         pass
+                if breath is None:
+                    continue  # the bell keeps time for the room even when this mind is silent
+                thought, nudge = breath
                 await self.settle(n, thought, nudge)
                 if self.state.room:
                     print(f"       · {self.state.room}", flush=True)
@@ -365,7 +381,10 @@ class Sit:
                 busy = True
                 n = self.bell_n
                 try:
-                    thought, nudge = await self.breathe_once(n)
+                    breath = await self.breathe_once(n)
+                    if breath is None:
+                        continue
+                    thought, nudge = breath
                     await self.settle(n, thought, nudge)
                     if self.state.room:
                         print(f"       · {self.state.room}", flush=True)
@@ -380,7 +399,11 @@ class Sit:
         if not self.journal:
             return
         print("\nreflecting...", flush=True)
-        reflection = await asyncio.to_thread(self.mind.reflect, self.cfg.subject, self.journal)
+        try:
+            reflection = await asyncio.to_thread(self.mind.reflect, self.cfg.subject, self.journal)
+        except BackendUnavailable as exc:
+            log.warning("no reflection: %s", exc)
+            reflection = ""
         if reflection:
             print(f"\n{reflection}\n")
             if self.role == "host":
