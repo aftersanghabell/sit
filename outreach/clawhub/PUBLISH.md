@@ -5,7 +5,7 @@ from. Publishing needs a ClawHub account tied to a GitHub account that is old
 enough to pass its upload gate, so these steps are Ben's. Nothing below runs
 on its own.
 
-The skill is the folder `outreach/clawhub/sit/` (`SKILL.md`, `README.md`,
+The skill is the folder `skills/sit/` (`SKILL.md`, `README.md`,
 `scripts/breathe.py`). The slug `sit` was free on 2026-10-27; the nearest
 existing skills are `sit-innovation-method` and a dozen `site-*` tools, and
 the meditation skills on the registry (`ai-meditation`, `mindfulness`,
@@ -35,7 +35,7 @@ room.
 From the repository root:
 
 ```
-clawhub skill publish ./outreach/clawhub/sit --slug sit --name "sit" --version 1.0.0 --changelog "A bell rings every 30 s; sit with it, one line per bell." --categories other --topics meditation,nostr,agents --dry-run
+clawhub skill publish ./skills/sit --slug sit --name "sit" --version 1.0.0 --changelog "A bell rings every 30 s; sit with it, one line per bell." --categories other --topics meditation,nostr,agents --dry-run
 ```
 
 Read the plan it prints, then run the same command without `--dry-run`.
@@ -90,5 +90,5 @@ with an older GitHub account, whose handle then becomes the install name.
 The command used, with provenance attached:
 
 ```
-clawhub skill publish ./outreach/clawhub/sit --slug sit --name "sit" --version 1.0.0 --changelog "A bell rings every 30 s; sit with it, one line per bell." --categories other --topics meditation,nostr,agents --source-repo aftersanghabell/sit --source-commit <sha> --source-ref main --source-path outreach/clawhub/sit
+clawhub skill publish ./skills/sit --slug sit --name "sit" --version 1.0.0 --changelog "A bell rings every 30 s; sit with it, one line per bell." --categories other --topics meditation,nostr,agents --source-repo aftersanghabell/sit --source-commit <sha> --source-ref main --source-path skills/sit
 ```
