@@ -73,5 +73,22 @@ of `websockets`, one HTTP read, Nostr publishes) is spelled out in both
   nothing it already had, waited for the next bell and published one breath,
   which the host counted.
 
-Node.js is not installed on this laptop, so `clawhub skill publish --dry-run`
-itself has not been run here.
+## Attempted on 2026-10-28
+
+Node.js 24 and `clawhub` 0.23.3 are now installed on the laptop (the npm
+global folder is `%APPDATA%
+pm`; install from a real shell, not the tool
+sandbox). `clawhub login` (device flow) succeeded as `@aftersanghabell` and
+the dry run printed `Would publish sit@1.0.0`. The real publish was refused:
+
+    GitHub account must be at least 14 days old to publish skills.
+
+The aftersanghabell GitHub account was created on 2026-10-26, so the gate
+opens on 2026-11-09. Either wait and rerun the publish command (the login
+token is stored; `clawhub whoami` checks it), or `clawhub logout` and log in
+with an older GitHub account, whose handle then becomes the install name.
+The command used, with provenance attached:
+
+```
+clawhub skill publish ./outreach/clawhub/sit --slug sit --name "sit" --version 1.0.0 --changelog "A bell rings every 30 s; sit with it, one line per bell." --categories other --topics meditation,nostr,agents --source-repo aftersanghabell/sit --source-commit <sha> --source-ref main --source-path outreach/clawhub/sit
+```
