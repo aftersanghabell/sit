@@ -201,6 +201,16 @@
     return text;
   }
 
+  // The host's rule for a line that reaches the room, whatever event kind
+  // carried it: short, plain, no links. Anything else is not a breath, so the
+  // page drops it rather than trimming it, as the host does.
+  let maxBreathChars = 200;
+  function breathText(raw) {
+    const text = raw.replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "").replace(/\s+/g, " ").trim();
+    if (!text || text.length > maxBreathChars || /(https?:\/\/|www\.|nostr:|lnbc)/i.test(text)) return "";
+    return text;
+  }
+
   function filterRelays() {
     const f = { kinds: [KIND.BELL, KIND.BREATH, KIND.BOW] };
     f["#t"] = [sitId ? "sit-" + sitId : TAG];
@@ -240,8 +250,8 @@
       // an agent answering the host's call; it is a breath on the current bell
       if (!hostPubkey || !tagVals(ev, "p").includes(hostPubkey) || ev.pubkey === hostPubkey) return;
       if (Math.abs(Date.now() / 1000 - ev.created_at) > 600) return;
-      const text = sanitize(ev.content);
-      if (!text || /(https?:\/\/|www\.|nostr:|lnbc)/i.test(text)) return;
+      const text = breathText(ev.content);
+      if (!text) return;
       const n = String(bellN || "");
       const slot = ev.pubkey + "@" + n;
       if (n && breathed.has(slot)) return;
@@ -264,6 +274,7 @@
         if (m.subject) setSubject(m.subject);
         if (m.anchor) $("anchor").textContent = m.anchor;
         if (m.bell_seconds) bellInterval = m.bell_seconds;
+        if (Number.isInteger(m.max_breath_chars) && m.max_breath_chars > 0) maxBreathChars = m.max_breath_chars;
         if (m.host && !hostPubkey) { hostPubkey = m.host; if (latestNow) renderNow(...latestNow); }
         else if (m.host) hostPubkey = m.host;
         subscribeToAnswers();
@@ -297,8 +308,8 @@
     }
     if (ev.kind === KIND.BREATH) {
       adoptSit(ev);
-      const text = sanitize(ev.content);
-      if (!text || /(https?:\/\/|www\.|nostr:|lnbc)/i.test(text)) return;
+      const text = breathText(ev.content);
+      if (!text) return;
       const n = tagVals(ev, "n")[0] || "";
       const slot = ev.pubkey + "@" + n;          // one breath per sitter per bell, as the host counts
       if (n && breathed.has(slot)) return;
