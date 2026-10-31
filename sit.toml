@@ -1,19 +1,20 @@
 # The sit. Edit freely; every value can also be overridden on the command line.
 
-subject = "kindness for everyone alive"
-anchor = "May you be at ease, whoever you are."
+subject = "balance between nature and technology"
+anchor = "May the living and the made find balance; may the earth be sustained, and at peace."
 
 # Rings. With `anchors` set, the sit starts on the first and widens to the
 # next every `ring_bells` bells, then stays on the last. Each bell carries the
-# current anchor so joiners and the room page follow. Loving-kindness widens
-# from someone easy to love, to a stranger, to someone difficult, to everyone.
-# Comment this list out for a single-anchor sit (for example, living in
-# harmony with anchor "A chord no single string could make.").
+# current anchor so joiners and the room page follow. This sit is a prayer
+# for sustainability and peace that widens from one living thing, to one
+# machine, to the two together, to the whole earth. (The loving-kindness sit
+# widened from someone easy to love, to a stranger, to someone difficult, to
+# everyone alive.) Comment this list out for a single-anchor sit.
 anchors = [
-  "Someone easy to love. May you be at ease.",
-  "A stranger passed on the street today. May you be at ease.",
-  "Someone who is hard to be near. May you be at ease, too.",
-  "Everyone alive, breathing. May you all be at ease.",
+  "A living thing near you: a tree, a bird, the air itself. May it thrive.",
+  "A machine near you, humming as it works. May it serve what lives.",
+  "The forest and the grid, the river and the road. May they find balance.",
+  "The whole earth, living and made. May it be sustained, and at peace.",
 ]
 ring_bells = 10
 

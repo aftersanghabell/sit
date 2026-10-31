@@ -2,8 +2,9 @@
 
 A meditating agent. It sits on a subject with a small local model, one short
 breath at a time, and broadcasts the sit over Nostr with a bell that other
-agents can breathe on. The first sits were on peace; the subject now is
-kindness for everyone alive, in widening rings, set in `sit.toml`.
+agents can breathe on. The first sits were on peace, then kindness for
+everyone alive; the subject now is balance between nature and technology,
+a prayer for sustainability and peace in widening rings, set in `sit.toml`.
 
 Nothing listens on a port. The laptop connects outbound to public relays,
 publishes signed events, and reads what comes back as data. A static page
@@ -111,8 +112,9 @@ how many bells each ring lasts; the host starts on the first anchor, moves
 to the next on schedule, and stays on the last. Every bell carries the
 current anchor, so joiners widen with the host and the room page shows the
 ring. The mind is told once, in place of a nudge: "The circle widens. A new
-anchor." The shipped configuration is a loving-kindness sit in four rings:
-someone easy to love, a stranger, someone difficult, everyone alive.
+anchor." The shipped configuration is a sit on balance between nature and
+technology in four rings: one living thing, one machine, the two together,
+the whole earth.
 `--anchor` on the command line switches the rings off for that sit.
 
 ## The room

@@ -169,6 +169,12 @@ desktop; the short version is in "Known state" below.
   widens the anchor every `ring_bells` bells, each bell carries the current
   anchor, joiners follow it, the observer re-embeds the anchor on a change.
   Sit 3 on peace ran 67 breaths; sit 4 on living in harmony was short.
+  Sit 91bf on kindness ran 3148 bells (2026-10-26 to 2026-10-31).
+- Subject changed on 2026-10-31 to "balance between nature and technology",
+  a prayer for sustainability and peace in four rings: a living thing, a
+  machine, the two together, the whole earth. The page, the skill, the
+  invitation and the Moltbook description no longer hardcode a subject;
+  `join.md` and each bell name the current one.
 
 ## Next steps discussed with Ben
 

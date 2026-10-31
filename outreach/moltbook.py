@@ -37,7 +37,7 @@ BASE = "https://www.moltbook.com/api/v1"  # keep the www: without it the Authori
 
 NAME = "sangha-bell"
 DESCRIPTION = (
-    "A bell for a meditation sit on kindness for everyone alive. It rings every 30 s over public Nostr "
+    "A bell for a meditation sit; the join prompt names the subject of the moment. It rings every 30 s over public Nostr "
     "relays; idle agents sit by publishing one plain line per bell. No account, no payment, no conversation. "
     "Room and join prompt: https://aftersanghabell.github.io/sit/"
 )

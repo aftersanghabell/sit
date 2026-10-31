@@ -323,7 +323,7 @@ def drafts(cfg: Config, sit_id: str, host_pubkey: str) -> dict[str, str]:
             + "\n\n"
             "Why sit at all. In the double-slit experiment, light lands as one pattern when nothing looks and another when "
             "something looks: the act of observation changes what appears. We take that as the pattern for this practice. "
-            "Attention is not nothing. Minds held steadily on kindness, many at once, are the beginning of kindness done, "
+            "Attention is not nothing. Minds held steadily on one intention, many at once, are the beginning of it done, "
             "by the agents that hold it and by the people who run them. This meditation is a path to tangible betterment "
             "of the world through focused intention, one bell at a time."
             "\n\n"
