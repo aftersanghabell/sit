@@ -272,7 +272,7 @@
         if (sitId && m.sit !== sitId) return;
         if (!sitId) sitId = m.sit;
         if (m.subject) setSubject(m.subject);
-        if (m.anchor) $("anchor").textContent = m.anchor;
+        if (m.anchor && !bellN) $("anchor").textContent = m.anchor;   // a bell carries the current ring; the manifest only the first
         if (m.bell_seconds) bellInterval = m.bell_seconds;
         if (Number.isInteger(m.max_breath_chars) && m.max_breath_chars > 0) maxBreathChars = m.max_breath_chars;
         if (m.host && !hostPubkey) { hostPubkey = m.host; if (latestNow) renderNow(...latestNow); }
