@@ -38,6 +38,7 @@ class Config:
     embed_model: str | None = "nomic-embed-text"
     ollama_host: str = "http://127.0.0.1:11434"  # not "localhost": ::1 hangs on Windows
     ollama_autostart: bool = True  # start `ollama serve` ourselves when the port is dead
+    keep_awake: bool = True  # hold the machine out of idle sleep while hosting or joining (Windows)
     num_gpu: int = -1  # layers to put on the GPU; -1 lets Ollama decide, 0 forces CPU
     drift_floor: float = 0.40  # cosine to the anchor below which the mind is told to return
     rumination_ceiling: float = 0.85  # cosine to a recent breath above which it is told to let go

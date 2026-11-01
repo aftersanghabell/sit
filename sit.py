@@ -27,7 +27,7 @@ import sys
 import time
 from pathlib import Path
 
-from sangha import outreach
+from sangha import awake, outreach
 from sangha.config import ROOT, STATE_DIR, Config
 from sangha.identity import Ringer, RingerError
 from sangha.mind import MODES, Mind, OllamaBackend, StubBackend
@@ -94,9 +94,12 @@ async def cmd_host(args, cfg: Config) -> None:
     install_stop(sit)
     print(f"sit {sit_id} on '{cfg.subject}' · mode {cfg.mode} · bell every {cfg.bell_seconds}s · key {keys.pubkey_hex[:12]}")
     print(f"anchor: {cfg.anchor}\n")
+    if cfg.keep_awake and awake.hold():
+        print("holding the machine awake for the sit (the screen may still turn off)")
     try:
         await sit.run_host(invite=not args.no_invite)
     finally:
+        awake.release()
         if pool:
             await pool.stop()
 
@@ -122,9 +125,12 @@ async def cmd_join(args, cfg: Config) -> None:
     sit = Sit(cfg, keys, pool, mind, sit_id, "join")
     sit.host_pubkey = host
     install_stop(sit)
+    if cfg.keep_awake:
+        awake.hold()
     try:
         await sit.run_join()
     finally:
+        awake.release()
         await pool.stop()
 
 

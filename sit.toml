@@ -41,6 +41,13 @@ ollama_host = "http://127.0.0.1:11434"
 # without its server). Set to false to leave the server to you.
 ollama_autostart = true
 
+# A sit runs while nobody touches the laptop, which is when Windows idle-sleeps
+# it; the first balance sit lost twenty hours that way. While hosting or
+# joining, the sit asks Windows to stay awake (the screen may still turn off).
+# The request ends with the process and changes no setting; a closed lid
+# still sleeps. Set to false to let the laptop sleep.
+keep_awake = true
+
 # GPU layers. -1 lets Ollama decide. 0 forces CPU: this laptop's Quadro P1000
 # (Pascal, driver 555) cannot run the CUDA runtime Ollama 0.40 ships, and the
 # llama-server crashes on load. Six CPU cores are enough for one line a breath.

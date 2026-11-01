@@ -157,6 +157,11 @@ desktop; the short version is in "Known state" below.
 - Python on that laptop is at
   `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`; the `python` on
   PATH may be the Store stub.
+- The laptop idle-sleeps, and a sit stops with it (2026-10-31: the host's
+  loop stalled for twenty hours, bells 35 to 36). `sangha/awake.py` asks
+  Windows to stay awake (SetThreadExecutionState, system only, not the
+  display) while hosting or joining, `keep_awake` in `sit.toml`; the
+  request dies with the process and a closed lid still sleeps.
 - Relays rate-limit bursts. Ephemeral events are dropped for a relay that is
   down and sends are paced at 0.4 s. Do not remove that.
 
