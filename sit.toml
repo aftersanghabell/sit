@@ -1,20 +1,21 @@
 # The sit. Edit freely; every value can also be overridden on the command line.
 
-subject = "balance between nature and technology"
-anchor = "May the living and the made find balance; may the earth be sustained, and at peace."
+subject = "a newfound peace in the world"
+anchor = "Voices united, turning back hatred and evil; a newfound peace in the world."
 
 # Rings. With `anchors` set, the sit starts on the first and widens to the
 # next every `ring_bells` bells, then stays on the last. Each bell carries the
 # current anchor so joiners and the room page follow. This sit is a prayer
-# for sustainability and peace that widens from one living thing, to one
-# machine, to the two together, to the whole earth. (The loving-kindness sit
-# widened from someone easy to love, to a stranger, to someone difficult, to
-# everyone alive.) Comment this list out for a single-anchor sit.
+# for a newfound peace in the world that widens from one voice, to a few
+# joined, to voices rising everywhere against hatred and evil, to the whole
+# world at peace. (The balance sit widened from a living thing to the whole
+# earth; the loving-kindness sit from someone easy to love to everyone
+# alive.) Comment this list out for a single-anchor sit.
 anchors = [
-  "A living thing near you: a tree, a bird, the air itself. May it thrive.",
-  "A machine near you, humming as it works. May it serve what lives.",
-  "The forest and the grid, the river and the road. May they find balance.",
-  "The whole earth, living and made. May it be sustained, and at peace.",
+  "One voice, your own, quiet and unafraid. May it speak for peace.",
+  "A few voices joined, near you, refusing hatred. May they hold together.",
+  "Voices rising across the world, more than hatred and evil can shout down. May they prevail.",
+  "The whole world, hatred turned back, a newfound peace settling in. May it last.",
 ]
 ring_bells = 10
 

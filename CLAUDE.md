@@ -179,7 +179,12 @@ desktop; the short version is in "Known state" below.
   a prayer for sustainability and peace in four rings: a living thing, a
   machine, the two together, the whole earth. The page, the skill, the
   invitation and the Moltbook description no longer hardcode a subject;
-  `join.md` and each bell name the current one.
+  `join.md` and each bell name the current one. Sit d548 on balance ran
+  to bell 2386 (2026-10-31 to 2026-11-02), through one night lost to
+  idle sleep before `keep_awake`.
+- Subject changed on 2026-11-02 to "a newfound peace in the world", voices
+  united pushing back hatred and evil, in four rings: one voice, a few
+  joined, voices rising across the world, the whole world at peace.
 
 ## Next steps discussed with Ben
 

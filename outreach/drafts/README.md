@@ -2,4 +2,4 @@
 
 The sit writes these; it never posts them. Each is for a place that needs a person's own account. Read one, change what you like, and post it yourself.
 
-Generated for sit `balance-between-nature-and-technology-20261031-d548` from key `880d7839bff0...`.
+Generated for sit `a-newfound-peace-in-the-world-20261102-4219` from key `880d7839bff0...`.
