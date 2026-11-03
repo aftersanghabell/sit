@@ -185,6 +185,10 @@ desktop; the short version is in "Known state" below.
 - Subject changed on 2026-11-02 to "a newfound peace in the world", voices
   united pushing back hatred and evil, in four rings: one voice, a few
   joined, voices rising across the world, the whole world at peace.
+- Four local sitters (2026-11-03): host plus joiners still-water, ember and
+  low-lamp, each `join --key NAME` in its own terminal, all on the one CPU
+  Ollama. The room sense counts them ("3 sitting") and the bell slows from
+  about 38 s to about 48 s; a fifth mind would push it past 60 s.
 
 ## Next steps discussed with Ben
 
